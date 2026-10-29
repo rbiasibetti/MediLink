@@ -1,0 +1,19 @@
+# Segredos e configuração local (nunca versionar)
+infra/jitsi/.env
+infra/jitsi/.jitsi-cfg/
+backend/config/local.env
+
+# Saídas de build e arquivos gerados
+backend/target/
+**/__pycache__/
+*.pyc
+
+# Dados de desenvolvimento
+infra/dev/mails/
+*.opus
+*.eml
+
+# Editores e sistema
+.idea/
+*.iml
+.DS_Store

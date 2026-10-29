@@ -1,0 +1,148 @@
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Api, ConsultaDetalhe, Sessao } from '../core/api';
+import { INTERVALO_ESPERA_MS } from '../core/config';
+import { JitsiRoom } from '../core/jitsi-room';
+
+type Estado = 'carregando' | 'sala' | 'saiu' | 'erro';
+
+/**
+ * Sala do médico (host). Mostra se há paciente aguardando e o consentimento, aceita o paciente e, ao sair da
+ * conferência, encerra a consulta no backend, mas só se ela estava em andamento: sair antes de admitir
+ * ninguém não encerra nada.
+ */
+@Component({
+  selector: 'app-consulta-medico',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [JitsiRoom, RouterLink],
+  template: `
+    <main class="pagina larga">
+      @switch (estado()) {
+        @case ('carregando') { <p role="status">Preparando a sala…</p> }
+        @case ('erro') {
+          <section class="card">
+            <h1>Não foi possível abrir a sala</h1>
+            <p>Verifique o login e se o agendamento é seu.</p>
+            <a class="btn" routerLink="/medico/agendar">Voltar</a>
+          </section>
+        }
+        @case ('sala') {
+          @if (sessao(); as s) {
+            <div class="barra" aria-live="polite">
+              @if (detalhe(); as d) {
+                @if (d.status === 'EM_ANDAMENTO') {
+                  <span>Consulta em andamento.</span>
+                } @else if (d.pacienteAguardando) {
+                  <span><strong>Paciente aguardando.</strong></span>
+                  <button class="btn" type="button" (click)="aceitar()" [disabled]="aceitando() || !salaPronta()">Aceitar paciente</button>
+                  @if (!salaPronta()) { <span class="muted">Preparando a sala…</span> }
+                } @else {
+                  <span>Aguardando o paciente chegar…</span>
+                }
+                <span class="muted">
+                  @if (d.capturaAutorizada) { Transcrição autorizada pelo paciente. }
+                  @else if (d.consentimentoEm) { Consentimento registrado; a captura começa com a consulta. }
+                  @else { Sem consentimento: não haverá transcrição. }
+                </span>
+              }
+            </div>
+            <div class="jitsi-wrap">
+              <app-jitsi-room [roomName]="s.roomName" [jwt]="s.jwt!" papel="medico" [transcrever]="detalhe()?.capturaAutorizada === true" (pronto)="salaPronta.set(true)" (saiu)="aoSair()" />
+            </div>
+          }
+        }
+        @case ('saiu') {
+          <section class="card">
+            @if (detalhe()?.status === 'ENCERRADA') {
+              <h1>Consulta encerrada</h1>
+              <p>A transcrição será gerada e salva no prontuário após o processamento.</p>
+            } @else {
+              <h1>Você saiu da sala</h1>
+              <p>A consulta ainda não começou, então não foi encerrada.</p>
+              <button class="btn" type="button" (click)="voltar()">Voltar para a sala</button>
+            }
+            <a class="btn secundario" routerLink="/medico/agendar">Novo agendamento</a>
+          </section>
+        }
+      }
+    </main>
+  `,
+})
+export class ConsultaMedico {
+  private readonly api = inject(Api);
+  private readonly route = inject(ActivatedRoute);
+
+  protected readonly estado = signal<Estado>('carregando');
+  protected readonly sessao = signal<Sessao | null>(null);
+  protected readonly detalhe = signal<ConsultaDetalhe | null>(null);
+  protected readonly aceitando = signal(false);
+  /** A sala já foi configurada ao entrar (e, se o flag estiver ligado, a E2EE acionada); só então o paciente é admitido. */
+  protected readonly salaPronta = signal(false);
+  private espera: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.parar());
+    const id = this.route.snapshot.paramMap.get('agendamentoId') ?? '';
+    this.api.tokenMedico(id).subscribe({
+      next: (s) => {
+        this.sessao.set(s);
+        this.estado.set('sala');
+        this.acompanhar();
+      },
+      error: () => this.estado.set('erro'),
+    });
+  }
+
+  /** Atualiza o estado da consulta enquanto a sala está aberta. */
+  private acompanhar(): void {
+    const s = this.sessao();
+    if (!s || this.estado() !== 'sala') return;
+    this.api.detalhe(s.consultaId).subscribe({
+      next: (d) => this.detalhe.set(d),
+      complete: () => { this.espera = setTimeout(() => this.acompanhar(), INTERVALO_ESPERA_MS); },
+      error: () => { this.espera = setTimeout(() => this.acompanhar(), INTERVALO_ESPERA_MS); },
+    });
+  }
+
+  protected aceitar(): void {
+    const s = this.sessao();
+    if (!s) return;
+    this.aceitando.set(true);
+    this.api.aceitar(s.consultaId).subscribe({
+      next: (d) => { this.detalhe.set(d); this.aceitando.set(false); },
+      error: () => this.aceitando.set(false),
+    });
+  }
+
+  /** Evento de saída do Jitsi: lê o estado atual e encerra só se a consulta estava em andamento. */
+  protected aoSair(): void {
+    const s = this.sessao();
+    if (!s) return;
+    this.parar();
+    this.api.detalhe(s.consultaId).subscribe({
+      next: (d) => {
+        if (d.status === 'EM_ANDAMENTO') {
+          this.api.encerrar(s.consultaId).subscribe({
+            next: (e) => { this.detalhe.set(e); this.estado.set('saiu'); },
+            error: () => this.estado.set('saiu'),
+          });
+        } else {
+          this.detalhe.set(d);
+          this.estado.set('saiu');
+        }
+      },
+      error: () => this.estado.set('saiu'),
+    });
+  }
+
+  protected voltar(): void {
+    this.salaPronta.set(false);
+    this.estado.set('sala');
+    this.acompanhar();
+  }
+
+  private parar(): void {
+    if (this.espera) clearTimeout(this.espera);
+    this.espera = null;
+  }
+}

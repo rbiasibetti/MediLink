@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>harness MediLink</title>
+<!-- Página de teste ponta a ponta: embute o Jitsi como o frontend faz (iframe em http://localhost:4200, a única
+     origem que o CSP do Jitsi permite) e imita o que o JitsiRoom do médico faz. Parâmetros no hash:
+     room, jwt, pedir=1 (pede a transcrição ao entrar, como o médico), ate=<segundos> (desliga ao fim). -->
+<div id="j" style="width:100vw;height:100vh"></div>
+<script src="https://localhost:8443/external_api.js"></script>
+<script>
+const p = new URLSearchParams(location.hash.slice(1));
+const log = (...a) => console.log('HARNESS', ...a);
+const api = new JitsiMeetExternalAPI('localhost:8443', {
+  roomName: p.get('room'), jwt: p.get('jwt'), parentNode: document.getElementById('j'), width: '100%', height: '100%',
+  configOverwrite: { prejoinConfig: { enabled: false }, disableDeepLinking: true } });
+api.addEventListener('videoConferenceJoined', () => {
+  log('joined');
+  api.executeCommand('setVideoQuality', 360);
+  if (p.get('pedir') === '1') setTimeout(() => { log('pedindo transcricao'); api.executeCommand('setSubtitles', true, false); }, 2000);
+  const ate = parseInt(p.get('ate') || '0', 10);
+  if (ate > 0) setTimeout(() => { log('desligando'); api.executeCommand('hangup'); }, ate * 1000);
+});
+api.addEventListener('videoConferenceLeft', () => log('left'));
+</script>

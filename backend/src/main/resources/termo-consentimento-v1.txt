@@ -1,0 +1,16 @@
+TERMO DE CONSENTIMENTO PARA CAPTAÇÃO DE ÁUDIO E TRANSCRIÇÃO DA TELECONSULTA
+(Minuta de engenharia: o texto definitivo deve ser validado pelo jurídico e pelo encarregado de dados antes do uso real.)
+
+1. O que será feito. Durante a teleconsulta, somente o áudio será captado. Depois que a consulta terminar, ele será transformado em texto automaticamente. O vídeo não é gravado.
+
+2. Para que serve. O texto da conversa documenta o atendimento e passa a fazer parte do seu prontuário.
+
+3. O que acontece com o áudio. Assim que a transcrição estiver salva, o arquivo de áudio é apagado. Apenas o texto é mantido.
+
+4. Quem acessa e onde fica. O texto é acessado pelo profissional responsável pelo atendimento. Todo o processamento ocorre na infraestrutura do próprio serviço, sem envio de áudio ou texto a terceiros.
+
+5. Prazo de guarda. O texto integra o prontuário e é mantido pelo prazo exigido pela legislação aplicável.
+
+6. Você decide. Recusar este termo não impede o atendimento: a consulta acontece normalmente, sem captação nem transcrição. Você pode retirar o consentimento a qualquer momento antes ou durante a consulta, e a captação será interrompida.
+
+Seus dados de saúde são dados pessoais sensíveis (LGPD, art. 11). Ao aceitar, você consente de forma livre e informada com o tratamento descrito acima.

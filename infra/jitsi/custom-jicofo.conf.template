@@ -1,0 +1,14 @@
+# Incluído pelo jicofo.conf do Jitsi (include "custom-jicofo.conf"). O dev.sh up gera ${CONFIG}/jicofo/custom-jicofo.conf
+# a partir deste template, trocando __SINK_WS_URL__ e __SINK_TOKEN__ pelos valores do .env.
+#
+# Captura de áudio no servidor (T11): o Jicofo manda o JVB exportar o áudio de cada reunião por WebSocket para o
+# audio sink do MediLink, que fala o protocolo "mediajson". {{MEETING_ID}} é trocado pelo id único da reunião.
+# Sem espaços dentro do template.
+jicofo {
+  transcription {
+    url-template = "__SINK_WS_URL__"
+    http-headers {
+      "Authorization" = "Bearer __SINK_TOKEN__"
+    }
+  }
+}
