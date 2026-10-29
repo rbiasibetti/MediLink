@@ -8,6 +8,7 @@ Plataforma de **telemedicina self-hosted** sobre o [Jitsi Meet](https://jitsi.or
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-2019%2B-CC2927)
 ![Jitsi](https://img.shields.io/badge/Jitsi-self--hosted-1D76BA)
 ![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
+![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-blue)
 
 > **Aviso.** Os trechos sobre LGPD e sigilo médico são orientação de engenharia, não aconselhamento jurídico. O termo de consentimento é uma minuta. Tudo isso precisa ser validado pelo jurídico e pelo encarregado de dados (DPO) antes do uso real.
 
@@ -392,4 +393,13 @@ Etapas mapeadas, **ainda não iniciadas**, para a próxima sequência:
 
 ## Licença
 
-Ainda não definida pelo titular do projeto. O arquivo `infra/jitsi/docker-compose.yml` vem do projeto [docker-jitsi-meet](https://github.com/jitsi/docker-jitsi-meet) (Apache-2.0), sem alterações.
+Distribuído sob a **licença MIT**. O texto completo está em [`LICENSE`](LICENSE).
+
+Arquivos de terceiros mantêm a própria licença e **não** são cobertos pela MIT deste projeto:
+
+| Arquivo | Origem | Licença |
+| --- | --- | --- |
+| `infra/jitsi/docker-compose.yml` | [docker-jitsi-meet](https://github.com/jitsi/docker-jitsi-meet), sem alterações | Apache-2.0 |
+| `backend/mvnw`, `backend/mvnw.cmd`, `backend/.mvn/` | Maven Wrapper | Apache-2.0 (cabeçalho nos próprios arquivos) |
+
+As dependências (Spring, Angular, driver do SQL Server e demais bibliotecas) e as imagens do Jitsi são obtidas dos seus projetos e seguem as licenças deles.

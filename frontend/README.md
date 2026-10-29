@@ -27,3 +27,7 @@ O Jitsi é embutido pela IFrame External API (`src/app/core/jitsi-room.ts`). O e
 - O paciente só entra na sala admitido pelo médico **e** depois de responder ao termo.
 - O CPF só trafega no corpo de um `POST`; nunca na URL nem em armazenamento do navegador.
 - A criptografia de ponta a ponta está **desligada por padrão** (`E2EE_ATIVA_POR_PADRAO`): a captura do áudio no servidor depende disso. Veja `docs/plan.md`.
+
+## Licença
+
+MIT, como o restante do projeto (veja o [`LICENSE`](../LICENSE) na raiz).
