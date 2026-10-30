@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface MedicoRepository extends JpaRepository<Medico, UUID> {
 
 	Optional<Medico> findByEmail(String email);
+
+	Optional<Medico> findByIntegradorIdAndChaveExterna(UUID integradorId, String chaveExterna);
 }

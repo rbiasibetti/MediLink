@@ -8,6 +8,7 @@ import br.com.medilink.repository.TentativaCpfRepository;
 import br.com.medilink.repository.TranscricaoJobRepository;
 import br.com.medilink.repository.TranscricaoRepository;
 import br.com.medilink.service.AuditService;
+import br.com.medilink.webhook.WebhookEventos;
 import br.com.medilink.transcricao.ArmazenamentoDeAudio;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,12 +45,13 @@ public class RetencaoService {
 	private final TranscricaoRepository transcricoes;
 	private final ArmazenamentoDeAudio armazenamento;
 	private final AuditService auditoria;
+	private final WebhookEventos webhooks;
 	private final Clock clock;
 	private final TransactionTemplate tx;
 
 	public RetencaoService(RetencaoProperties props, TentativaCpfRepository tentativas, AudioTransitorioRepository audios,
 			TranscricaoJobRepository jobs, TranscricaoRepository transcricoes, ArmazenamentoDeAudio armazenamento,
-			AuditService auditoria, Clock clock, PlatformTransactionManager txManager) {
+			AuditService auditoria, Clock clock, PlatformTransactionManager txManager, WebhookEventos webhooks) {
 		this.props = props;
 		this.tentativas = tentativas;
 		this.audios = audios;
@@ -57,6 +59,7 @@ public class RetencaoService {
 		this.transcricoes = transcricoes;
 		this.armazenamento = armazenamento;
 		this.auditoria = auditoria;
+		this.webhooks = webhooks;
 		this.clock = clock;
 		this.tx = new TransactionTemplate(txManager);
 	}
@@ -105,7 +108,10 @@ public class RetencaoService {
 			tx.executeWithoutResult(s -> {
 				audios.findById(audioId).ifPresent(x -> x.descartar(Instant.now(clock)));
 				jobs.findByConsultaId(consultaId).filter(j -> JOBS_QUE_PERDEM_O_AUDIO.contains(j.getStatus()))
-						.ifPresent(j -> j.marcar(JobStatus.EXPIRADO, Instant.now(clock)));
+						.ifPresent(j -> {
+							j.marcar(JobStatus.EXPIRADO, Instant.now(clock));
+							webhooks.registrar(consultaId, WebhookEventos.INDISPONIVEL, "EXPIRADO");
+						});
 				auditoria.registrar(ATOR, "AUDIO_EXPIRADO", "consulta/" + consultaId);
 			});
 			armazenamento.removerPastaVazia(consultaId);

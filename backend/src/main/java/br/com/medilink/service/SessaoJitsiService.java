@@ -33,16 +33,18 @@ public class SessaoJitsiService {
 	private final EntradaTokenService entrada;
 	private final JitsiTokenService jitsi;
 	private final AuditService auditoria;
+	private final ValidadeDoLink validade;
 
 	public SessaoJitsiService(AgendamentoService agendamentos, AgendamentoRepository agendamentoRepo,
 			ConsultaRepository consultas, EntradaTokenService entrada, JitsiTokenService jitsi,
-			AuditService auditoria) {
+			AuditService auditoria, ValidadeDoLink validade) {
 		this.agendamentos = agendamentos;
 		this.agendamentoRepo = agendamentoRepo;
 		this.consultas = consultas;
 		this.entrada = entrada;
 		this.jitsi = jitsi;
 		this.auditoria = auditoria;
+		this.validade = validade;
 	}
 
 	/** Host: moderador (admite o paciente pelo lobby). Só o médico dono; para os demais o agendamento não existe. */
@@ -50,6 +52,9 @@ public class SessaoJitsiService {
 	public Sessao paraMedico(String medicoEmail, UUID agendamentoId) {
 		Criado c = agendamentos.buscar(medicoEmail, agendamentoId);
 		Agendamento a = c.agendamento();
+		if (a.getStatus() != AgendamentoStatus.AGENDADO) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "A reunião foi cancelada.");
+		}
 		String jwt = jitsi.emitir(a.getRoomName(),
 				new Participante(a.getMedico().getId().toString(), a.getMedico().getNome(), null, true));
 		auditoria.registrar(medicoEmail, "TOKEN_JITSI_MEDICO", "agendamento/" + a.getId());
@@ -74,6 +79,9 @@ public class SessaoJitsiService {
 				.orElseThrow(SessaoJitsiService::negado);
 		Consulta consulta = consultas.findByAgendamentoId(a.getId()).orElseThrow(SessaoJitsiService::negado);
 
+		if (validade.expirado(a, consulta)) {
+			throw negado(); // link vencido (horário agendado + tolerância) e a consulta nunca começou
+		}
 		// Toda consulta é registrada: sem o consentimento ao termo o paciente não chega nem à espera. Vale também para
 		// quem retirou o consentimento e tenta voltar à sala (a credencial do Jitsi não é reemitida).
 		if (!consulta.aceitaConsentimento()) {

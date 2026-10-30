@@ -52,6 +52,9 @@ class ExigenciasDeProducao implements InitializingBean {
 		if (env.getProperty("medilink.crypto.aceitar-texto-legado", Boolean.class, false)) {
 			p.add("medilink.crypto.aceitar-texto-legado precisa ficar desligado (só serve para migrar uma base antiga)");
 		}
+		if (env.getProperty("medilink.webhook.modo-dev", Boolean.class, false)) {
+			p.add("medilink.webhook.modo-dev precisa ficar desligado (libera HTTP e endereços locais no webhook)");
+		}
 		return p;
 	}
 }

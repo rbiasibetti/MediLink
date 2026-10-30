@@ -22,7 +22,7 @@ class JitsiStub {
 const sessao: Sessao = { estado: 'ADMITIDO', roomName: 'consulta-abc', consultaId: 'c1', jwt: 'JWT-MEDICO' };
 const detalhe = (status: string, extra: Partial<ConsultaDetalhe> = {}): ConsultaDetalhe => ({
   id: 'c1', roomName: 'consulta-abc', status, inicioEm: null, fimEm: null, pacienteAguardando: false,
-  consentimentoEm: null, consentimentoVersao: null, capturaAutorizada: false, ...extra,
+  consentimentoEm: null, consentimentoVersao: null, capturaAutorizada: false, podeReabrir: false, ...extra,
 });
 
 function montar(api: Record<string, unknown>) {
@@ -154,5 +154,42 @@ describe('ConsultaMedico', () => {
     await assentar(f);
 
     expect(f.debugElement.query(By.directive(JitsiStub)).componentInstance.papel()).toBe('medico');
+  });
+
+  it('encerrada há pouco: oferece reabrir, e reabrir volta à sala', async () => {
+    const api = {
+      tokenMedico: vi.fn(() => of(sessao)),
+      detalhe: vi.fn(() => of(detalhe('EM_ANDAMENTO'))),
+      encerrar: vi.fn(() => of(detalhe('ENCERRADA', { fimEm: '2026-11-03T15:00:00Z', podeReabrir: true }))),
+      reabrir: vi.fn(() => of(detalhe('EM_ANDAMENTO'))),
+    };
+    const f = montar(api);
+    await assentar(f);
+    f.debugElement.query(By.directive(JitsiStub)).componentInstance.saiu.emit();
+    await assentar(f);
+    expect(f.nativeElement.textContent).toContain('Consulta encerrada');
+    expect(f.nativeElement.textContent).toContain('Reabrir a consulta');
+
+    const botao = Array.from(f.nativeElement.querySelectorAll('button')).find((b) => (b as HTMLElement).textContent?.includes('Reabrir')) as HTMLButtonElement;
+    botao.click();
+    await assentar(f);
+
+    expect(api.reabrir).toHaveBeenCalledWith('c1');
+    expect(f.debugElement.query(By.directive(JitsiStub))).not.toBeNull(); // de volta à sala
+  });
+
+  it('encerrada fora do prazo não oferece reabrir', async () => {
+    const api = {
+      tokenMedico: vi.fn(() => of(sessao)),
+      detalhe: vi.fn(() => of(detalhe('EM_ANDAMENTO'))),
+      encerrar: vi.fn(() => of(detalhe('ENCERRADA', { podeReabrir: false }))),
+    };
+    const f = montar(api);
+    await assentar(f);
+    f.debugElement.query(By.directive(JitsiStub)).componentInstance.saiu.emit();
+    await assentar(f);
+
+    expect(f.nativeElement.textContent).toContain('Consulta encerrada');
+    expect(f.nativeElement.textContent).not.toContain('Reabrir a consulta');
   });
 });

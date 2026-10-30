@@ -1,5 +1,6 @@
 package br.com.medilink.transcricao;
 
+import br.com.medilink.config.ConsultaProperties;
 import br.com.medilink.domain.AudioStatus;
 import br.com.medilink.domain.AudioTransitorio;
 import br.com.medilink.domain.Consulta;
@@ -12,6 +13,7 @@ import br.com.medilink.repository.ConsultaParticipanteRepository;
 import br.com.medilink.repository.ConsultaRepository;
 import br.com.medilink.repository.TranscricaoJobRepository;
 import br.com.medilink.service.AuditService;
+import br.com.medilink.webhook.WebhookEventos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -47,6 +49,8 @@ public class TranscricaoJobService {
 	private final ConsultaParticipanteRepository participantes;
 	private final PublicadorDeJobs publicador;
 	private final TranscricaoProperties props;
+	private final ConsultaProperties consultaProps;
+	private final WebhookEventos webhooks;
 	private final JsonMapper json;
 	private final AuditService auditoria;
 	private final Clock clock;
@@ -54,13 +58,15 @@ public class TranscricaoJobService {
 
 	public TranscricaoJobService(TranscricaoJobRepository jobs, AudioTransitorioRepository audios, ConsultaRepository consultas,
 			ConsultaParticipanteRepository participantes, PublicadorDeJobs publicador, TranscricaoProperties props,
-			JsonMapper json, AuditService auditoria, Clock clock, PlatformTransactionManager txManager) {
+			JsonMapper json, AuditService auditoria, Clock clock, PlatformTransactionManager txManager, ConsultaProperties consulta, WebhookEventos webhooks) {
 		this.jobs = jobs;
 		this.audios = audios;
 		this.consultas = consultas;
 		this.participantes = participantes;
 		this.publicador = publicador;
 		this.props = props;
+		this.consultaProps = consulta;
+		this.webhooks = webhooks;
 		this.json = json;
 		this.auditoria = auditoria;
 		this.clock = clock;
@@ -71,7 +77,10 @@ public class TranscricaoJobService {
 	@Transactional
 	public void criarAoEncerrar(UUID consultaId) {
 		if (jobs.findByConsultaId(consultaId).isEmpty()) {
-			jobs.save(new TranscricaoJob(consultaId, Instant.now(clock)));
+			Instant agora = Instant.now(clock);
+			TranscricaoJob job = new TranscricaoJob(consultaId, agora);
+			job.elegivelAPartirDe(agora.plus(consultaProps.toleranciaReabertura())); // o médico ainda pode reabrir
+			jobs.save(job);
 		}
 	}
 
@@ -93,6 +102,9 @@ public class TranscricaoJobService {
 			return false;
 		}
 		Instant agora = Instant.now(clock);
+		if (job.getElegivelEm() != null && agora.isBefore(job.getElegivelEm())) {
+			return false; // dentro da janela de tolerância: a consulta ainda pode ser reaberta
+		}
 		Consulta consulta = consultas.findById(job.getConsultaId()).orElseThrow();
 		List<AudioTransitorio> disponiveis = audios.findByConsultaIdOrderByIniciadoEm(consulta.getId()).stream()
 				.filter(a -> a.getStatus() != AudioStatus.DESCARTADO).toList();
@@ -100,6 +112,7 @@ public class TranscricaoJobService {
 		if (disponiveis.isEmpty()) {
 			job.marcar(JobStatus.SEM_AUDIO, agora);
 			auditoria.registrar(ATOR, "TRANSCRICAO_SEM_AUDIO", "consulta/" + consulta.getId());
+			webhooks.registrar(consulta.getId(), WebhookEventos.INDISPONIVEL, "SEM_AUDIO");
 			return false;
 		}
 		boolean aindaGravando = disponiveis.stream().anyMatch(a -> a.getStatus() == AudioStatus.GRAVANDO);
@@ -115,6 +128,7 @@ public class TranscricaoJobService {
 			job.registrarFalha(e.getClass().getSimpleName(), agora); // só o tipo, nunca a mensagem
 			if (job.getTentativas() >= props.maxTentativas()) {
 				job.marcar(JobStatus.FALHA_NO_ENVIO, agora);
+				webhooks.registrar(consulta.getId(), WebhookEventos.INDISPONIVEL, "FALHA_NO_ENVIO");
 				log.error("Transcrição: desistiu de enviar o job da consulta {} após {} tentativas", consulta.getId(), job.getTentativas());
 			}
 			else {

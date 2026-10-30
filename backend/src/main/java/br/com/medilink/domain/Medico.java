@@ -28,7 +28,35 @@ public class Medico {
 	@Column(nullable = false, unique = true, length = 254)
 	private String email;
 
+	/** Preenchidos só para médicos criados por um sistema integrado (T16); o login local continua pelo e-mail. */
+	@Column(name = "integrador_id")
+	private UUID integradorId;
+
+	@Nationalized
+	@Column(name = "chave_externa", length = 50)
+	private String chaveExterna;
+
 	protected Medico() {
+	}
+
+	/** Médico de um sistema integrado: o e-mail é sintético (não entregável) e só existe para identificar o login. */
+	public static Medico externo(String nome, String chave, String emailSintetico, UUID integradorId) {
+		Medico m = new Medico(nome, chave, emailSintetico);
+		m.integradorId = integradorId;
+		m.chaveExterna = chave;
+		return m;
+	}
+
+	public void renomear(String novoNome) {
+		this.nome = novoNome;
+	}
+
+	public UUID getIntegradorId() {
+		return integradorId;
+	}
+
+	public String getChaveExterna() {
+		return chaveExterna;
 	}
 
 	public Medico(String nome, String identificadorProfissional, String email) {

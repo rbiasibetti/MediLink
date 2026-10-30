@@ -60,6 +60,11 @@ type Estado = 'carregando' | 'sala' | 'saiu' | 'erro';
             @if (detalhe()?.status === 'ENCERRADA') {
               <h1>Consulta encerrada</h1>
               <p>A transcrição será gerada e salva no prontuário após o processamento.</p>
+              @if (detalhe()?.podeReabrir) {
+                <p class="muted">Encerrou por engano ou a conexão caiu? Dentro de poucos minutos você ainda pode voltar à mesma consulta.</p>
+                <button class="btn" type="button" (click)="reabrir()">Reabrir a consulta</button>
+              }
+              <a class="btn secundario" [routerLink]="['/medico/transcricao', detalhe()?.id]">Ver a transcrição</a>
             } @else {
               <h1>Você saiu da sala</h1>
               <p>A consulta ainda não começou, então não foi encerrada.</p>
@@ -122,6 +127,23 @@ export class ConsultaMedico {
     this.api.aceitar(s.consultaId).subscribe({
       next: (d) => { this.detalhe.set(d); this.aceitando.set(false); },
       error: () => this.aceitando.set(false),
+    });
+  }
+
+  /** Volta a uma consulta encerrada há pouco (T17): reabre no backend e entra de novo na sala. */
+  protected reabrir(): void {
+    const s = this.sessao();
+    if (!s) return;
+    this.api.reabrir(s.consultaId).subscribe({
+      next: (d) => {
+        this.detalhe.set(d);
+        this.salaPronta.set(false);
+        this.api.tokenMedico(this.route.snapshot.paramMap.get('agendamentoId') ?? '').subscribe({
+          next: (nova) => { this.sessao.set(nova); this.estado.set('sala'); this.acompanhar(); },
+          error: () => this.estado.set('erro'),
+        });
+      },
+      error: () => undefined, // o prazo terminou: a tela segue mostrando a consulta encerrada
     });
   }
 

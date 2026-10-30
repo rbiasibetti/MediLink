@@ -25,13 +25,15 @@ class ExigenciasDeProducaoTest {
 	void ambienteDeDesenvolvimentoEBarradoEmProducao() {
 		var dev = new MockEnvironment()
 				.withProperty("spring.datasource.url", "jdbc:sqlserver://localhost:1433;databaseName=medilink_dev;encrypt=true;trustServerCertificate=true")
-				.withProperty("medilink.crypto.aceitar-texto-legado", "true");
+				.withProperty("medilink.crypto.aceitar-texto-legado", "true")
+				.withProperty("medilink.webhook.modo-dev", "true");
 
-		assertThat(ExigenciasDeProducao.violacoes(dev)).hasSize(4)
+		assertThat(ExigenciasDeProducao.violacoes(dev)).hasSize(5)
 				.anyMatch(m -> m.contains("trustServerCertificate"))
 				.anyMatch(m -> m.contains("server.ssl.enabled"))
 				.anyMatch(m -> m.contains("kafka"))
-				.anyMatch(m -> m.contains("aceitar-texto-legado"));
+				.anyMatch(m -> m.contains("aceitar-texto-legado"))
+				.anyMatch(m -> m.contains("webhook.modo-dev"));
 	}
 
 	@Test

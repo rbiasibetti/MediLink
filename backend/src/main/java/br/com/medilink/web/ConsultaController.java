@@ -38,6 +38,12 @@ class ConsultaController {
 		return consultas.aceitar(medico.getName(), id);
 	}
 
+	/** Reabre uma consulta encerrada há pouco, dentro da tolerância (T17). */
+	@PostMapping("/reabrir")
+	Detalhe reabrir(@PathVariable UUID id, Principal medico) {
+		return consultas.reabrir(medico.getName(), id);
+	}
+
 	/** 200 com a transcrição; 202 enquanto o worker ainda processa. Dado sensível: só o médico dono lê. */
 	@GetMapping("/transcricao")
 	ResponseEntity<?> transcricao(@PathVariable UUID id, Principal medico) {

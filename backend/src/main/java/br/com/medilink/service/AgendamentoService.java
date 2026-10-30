@@ -90,11 +90,20 @@ public class AgendamentoService {
 		return medicos.findByEmail(email).orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
 	}
 
+	/** Link que o paciente recebe: base pública + /sala/{roomName}. */
+	public String linkPaciente(String roomName) {
+		return linkDe(roomName);
+	}
+
 	private String linkDe(String roomName) {
 		return props.publicBaseUrl().replaceAll("/+$", "") + "/sala/" + roomName;
 	}
 
 	/** 128 bits aleatórios: a sala não é adivinhável a partir de dados do agendamento. */
+	public static String novoRoomName() {
+		return gerarRoomName();
+	}
+
 	private static String gerarRoomName() {
 		byte[] bytes = new byte[16];
 		RANDOM.nextBytes(bytes);

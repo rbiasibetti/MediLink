@@ -103,8 +103,12 @@ class AgendamentoApiTest {
 		mvc.perform(post("/api/agendamentos").with(user(emailMedico)).contentType(MediaType.APPLICATION_JSON)
 				.content(corpo(CPF, amanha(), ""))).andExpect(status().isCreated());
 
-		assertThat(agendamentos.findAll()).allSatisfy(a ->
-				assertThat(a.getPacienteCpfHmac()).hasSize(64).doesNotContain("52998224725"));
+		// Sem CPF (agendamento por API sem CPF) o hash é nulo; com CPF é sempre o HMAC, nunca o número.
+		assertThat(agendamentos.findAll()).allSatisfy(a -> {
+			if (a.getPacienteCpfHmac() != null) {
+				assertThat(a.getPacienteCpfHmac()).hasSize(64).doesNotContain("52998224725");
+			}
+		});
 	}
 
 	@Test

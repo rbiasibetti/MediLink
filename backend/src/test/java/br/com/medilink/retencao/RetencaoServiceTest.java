@@ -155,7 +155,7 @@ class RetencaoServiceTest {
 	@Test
 	void semPrazoDeTranscricaoNadaEApagado() throws Exception {
 		var semPrazo = new RetencaoService(new RetencaoProperties(false, java.time.Duration.ofHours(1), java.time.Duration.ofHours(24),
-				java.time.Duration.ofDays(7), java.time.Duration.ZERO), null, null, null, null, null, null, java.time.Clock.systemUTC(), null);
+				java.time.Duration.ofDays(7), java.time.Duration.ZERO), null, null, null, null, null, null, java.time.Clock.systemUTC(), null, null);
 
 		assertThat(semPrazo.expirarTranscricoes()).isZero();
 	}

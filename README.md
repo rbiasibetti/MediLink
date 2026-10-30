@@ -52,6 +52,10 @@ O projeto segue **SDD (Spec-Driven Development)**: especificação → plano té
 | Transcrição | **T12** Fila e worker de transcrição (faster-whisper) | Pronta |
 | Transcrição | **T13** Gravar a transcrição e descartar o áudio | Pronta |
 | Compliance | **T14** Criptografia em repouso, auditoria de leitura, retenção | Pronta |
+| Integração | **T16** API key e agendamentos por API | Pronta |
+| Integração | **T17** Médico entra por link de uso único; reabertura e inatividade | Pronta |
+| Administração | **T18** Administrador (senha + TOTP), painel, keys e termo de consentimento | Pronta |
+| Integração | **T19** Webhook de devolução da transcrição | Pronta |
 | Escala | **T15** Vários JVBs, autoscaling e teste de carga (até 1.000 salas) | Mapeada, não iniciada |
 
 O estado detalhado de cada tarefa, com o que foi e o que **não** foi verificado, está em [`docs/tasks.md`](docs/tasks.md).
@@ -290,6 +294,8 @@ npx ng serve       # http://localhost:4200, com proxy de /api para o backend em 
 | `MEDILINK_JITSI_APP_ID`, `MEDILINK_JITSI_AUDIENCE`, `MEDILINK_JITSI_XMPP_DOMAIN` | não | Padrões `medilink`, `jitsi`, `meet.jitsi`; devem casar com o `.env` do Jitsi |
 | `MEDILINK_SINK_TOKEN` | sim | Segredo que o Jicofo envia ao sink (`SINK_TOKEN` do Jitsi) |
 | `MEDILINK_DATA_KEY` | sim | Chave mestra AES-256 (32 bytes em Base64: `openssl rand -base64 32`) da cifra em repouso. **Perdê-la torna as transcrições ilegíveis.** O worker precisa da mesma chave |
+| `MEDILINK_ADMIN_EMAIL`, `MEDILINK_ADMIN_SENHA` | não | Criam o primeiro administrador quando ainda não há nenhum (senha de 12+ caracteres; o TOTP é cadastrado no primeiro login). Em dev já existe `admin@medilink.local` |
+| `MEDILINK_CONSULTA_TOLERANCIA_REABERTURA` | não | Janela em que o médico ainda pode reabrir a consulta encerrada; **a transcrição só é enviada depois dela** (padrão `10m`; os scripts de ponta a ponta usam `0s`) |
 | `MEDILINK_DATA_KEY_ID`, `MEDILINK_DATA_KEYS_ANTERIORES` | não | Id da chave ativa (padrão `k1`) e, para rotação, chaves aposentadas (`id:base64,…` no worker; `medilink.crypto.chaves-anteriores.<id>` no backend) |
 | `MEDILINK_SINK_DIR` | não | Pasta dos arquivos de áudio transitórios (padrão `${java.io.tmpdir}/medilink-audio`) |
 | `MEDILINK_KAFKA_BOOTSTRAP` | não | Broker da fila de transcrição (padrão `localhost:9092`) |
@@ -337,6 +343,41 @@ Rotas do **médico** exigem autenticação (HTTP Basic provisório); as do **pac
 | `WS` | `/api/audio-sink/{meetingId}?sala={roomName}` | JVB | Recebe o áudio (autenticado por `Authorization: Bearer`) |
 | `GET` | `/actuator/health` | público | Saúde da aplicação |
 
+### API de integração (sistemas externos, por API key)
+
+Autenticada pelo cabeçalho `X-API-Key: mlk_<id>_<segredo>` (nunca na URL), só servidor a servidor. Cada key pertence a um sistema integrado, tem escopos e pode ser revogada; um sistema só enxerga o que criou (o resto responde `404`). Detalhes e exemplos em [`docs/plan.md`](docs/plan.md).
+
+| Método | Rota | Escopo | Função |
+| --- | --- | --- | --- |
+| `POST` | `/api/integracao/v1/agendamentos` | `agendamento:escrever` | Cria o agendamento (médico, horário, paciente, CPF opcional, `notificar`, `webhook.caminho`) e devolve a **chave da reunião** e o **link do paciente**. A mesma `agendamento.chave` devolve o existente (idempotente) |
+| `PATCH` | `/api/integracao/v1/agendamentos/{chave}` | `agendamento:escrever` | Altera só o informado, enquanto a consulta não começou |
+| `DELETE` | `/api/integracao/v1/agendamentos/{chave}` | `agendamento:escrever` | **Cancela** (o link para de funcionar); depois de iniciada, `409` |
+| `GET` | `/api/integracao/v1/agendamentos/{chave}` | `agendamento:ler` | Estado da reunião, sem dado do paciente |
+| `POST` | `/api/integracao/v1/agendamentos/{chave}/acesso-medico` | `sala:iniciar` | Recebe `{nomeMedico, chaveMedico}` e devolve o **link de uso único** do médico (`…/medico/acesso#t=…`); nunca um JWT |
+| `POST` | `/api/medico/sessao` | pública | O navegador do médico troca o link por uma sessão presa àquela consulta |
+
+### API administrativa (`/api/admin/**`, sessão do administrador: senha + TOTP)
+
+| Rota | Função |
+| --- | --- |
+| `POST /api/admin/login` | Senha e código do autenticador; no primeiro acesso entrega o segredo para cadastrá-lo |
+| `GET /api/admin/painel` | Contagens e estados (sem dado de paciente) e incidentes |
+| `POST /api/admin/jobs/{consultaId}/reenviar` | Recoloca na fila um job que falhou |
+| `…/integradores`, `…/integradores/{id}/chaves`, `…/chaves/{id}/revogar`, `…/integradores/{id}/webhook` | Sistemas integrados, API keys (mostradas uma vez) e webhook |
+| `…/termos` (`POST`, `PUT /{id}`, `POST /{id}/publicar`, `DELETE /{id}`) | Versões do termo de consentimento; publicada é imutável |
+| `GET /api/admin/webhooks/entregas`, `POST …/{id}/reenviar` | Estado das entregas de webhook e reenvio |
+
+A interface fica em `/admin` (login) e `/admin/painel` (Andamento, Sistemas e keys, Termo de consentimento, Webhooks).
+
+### Webhook de devolução
+
+Se o agendamento informou `webhook.caminho` e o sistema tem webhook ativo, a plataforma envia um `POST` assinado para a **URL base cadastrada pelo administrador + o caminho/parâmetros do agendamento** quando a transcrição fica pronta (`transcricao.concluida`, com texto e segmentos) ou quando ela não vai existir (`transcricao.indisponivel`, com o motivo). O corpo nunca leva CPF, e-mail nem nome do paciente.
+
+- **Assinatura:** `X-MediLink-Signature: t=<epoch>,v1=<HMAC-SHA256(segredo, t + "." + corpo)>`; recuse mensagens com `t` fora de 5 minutos e deduplique por `X-MediLink-Event-Id` (entrega "pelo menos uma vez").
+- **Resposta esperada:** `2xx`. `5xx`, `429` e falhas de rede repetem (1 min, 5 min, 30 min, 2 h, 6 h, 24 h); os demais `4xx` e qualquer redirecionamento encerram a entrega.
+- **Defesas do lado da plataforma:** só HTTPS com certificado verificado, nenhum endereço interno, nenhum redirecionamento; o destino não pode sair da URL base cadastrada.
+- Receptor de teste: `python3 infra/dev/webhook_sink.py 9099 <segredo>`.
+
 Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por exemplo, o CPF).
 
 ## Segurança e privacidade
@@ -345,6 +386,9 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 - **Link e sala**: nome da sala com 128 bits aleatórios; um JWT HS256 por sala, com expiração; o paciente nunca recebe moderação.
 - **Aceite no backend**: a credencial do Jitsi do paciente só é emitida depois do aceite do médico. Como a sala do Jitsi nasce aberta, esse portão fica no backend, e sem JWT ninguém entra.
 - **Interface do Jitsi não exposta**: navegação direta (`Sec-Fetch-Dest: document`) recebe 403 e só o iframe do MediLink carrega a interface; `frame-ancestors` restringe quem pode embutir. É uma camada de ocultação; **a fronteira de segurança é o JWT**.
+- **Integração por API key**: key de 256 bits só no cabeçalho e guardada como hash, com escopos, validade, revogação e limite de uso; um sistema nunca enxerga o de outro; o médico entra por **link de uso único** (token no fragmento da URL, 5 min) que vira uma sessão presa a UMA consulta, e o JWT do Jitsi nunca sai da plataforma.
+- **Administração**: senha (BCrypt) + TOTP com código de uso único, bloqueio por tentativas, sessão curta só em memória, painel sem nenhum dado de paciente, tudo auditado.
+- **Webhook**: destino preso à URL base cadastrada, só HTTPS com certificado e nome verificados, nenhum endereço interno (anti-SSRF, com o IP fixado na conexão), nenhum redirecionamento, corpo assinado por HMAC com carimbo de tempo e sem CPF, e-mail nem nome do paciente.
 - **Consentimento obrigatório**: toda teleconsulta é registrada, então quem não aceita o termo não chega à sala de espera nem à sala (o médico também não consegue aceitá-lo). Quem retira o consentimento no meio da consulta perde a credencial e a tela encerra a participação; o médico vê um alerta. Termo versionado, com a versão gravada junto da data. O **audio sink confere o consentimento por conta própria** a cada segundo e descarta o áudio sem ele, independentemente de quem pediu a exportação.
 - **Fila e worker**: o job só tem referências (nada de áudio, texto, CPF ou nome); o worker valida o caminho do arquivo, nunca registra o texto em log e, em falha, devolve só o tipo do erro. O **resultado carrega o texto da consulta** (dado sensível de saúde): o tópico precisa de controle de acesso e cifragem (T14).
 - **Cifragem em repouso (AES-256-GCM)**: o áudio é gravado já cifrado (`.opus.enc`) e o worker o decifra só em memória; as colunas da transcrição guardam `enc:…`. Um dump do banco ou um `cat` no disco não mostram a consulta. Chave mestra fora do git e do banco; formato e rotação em [`docs/plan.md`](docs/plan.md).
@@ -360,14 +404,14 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 O banco dos testes é **sempre o SQL Server local** (`medilink_test`); não há banco em memória.
 
 ```bash
-# backend: 163 testes (unitários e de integração: audio sink com servidor real e fila no Redpanda local)
+# backend: 246 testes (unitários e de integração: audio sink com servidor real e fila no Redpanda local)
 cd backend && ./run-mssql.sh test
 ./run-mssql.sh test -Dtest=ConsultaAceiteApiTest    # só uma classe
 
 # worker de transcrição: 39 testes (sem modelo e sem broker)
 cd worker && .venv/bin/python -m pytest -q
 
-# frontend: 41 testes (Vitest)
+# frontend: 59 testes (Vitest)
 cd frontend && npx ng test --watch=false
 
 # ponta a ponta com Jitsi real (pare o ng serve antes: a porta 4200 precisa estar livre)
@@ -378,6 +422,9 @@ worker/.venv/bin/python infra/jitsi/e2e/verify_t12.py 'medico@medilink.local:dev
 
 # ponta a ponta da gravação: o backend (em dev, na :8090) consome o resultado; a API entrega a transcrição e o áudio some do disco
 worker/.venv/bin/python infra/jitsi/e2e/verify_t13.py 'medico@medilink.local:dev-only-change-me' medico.wav paciente.wav
+
+# integração, médico por link, administração e webhook por HTTP de verdade (backend em dev iniciado com MEDILINK_CONSULTA_TOLERANCIA_REABERTURA=0s)
+python3 -I infra/dev/smoke_integracao.py
 ```
 
 Scripts de verificação contra o Prosody real (precisam do Jitsi e do backend em dev no ar):
@@ -407,7 +454,7 @@ As decisões e o raciocínio estão em [`docs/plan.md`](docs/plan.md). As princi
 ## Limitações conhecidas
 
 - O **gatilho da captura** é a página do médico. O consentimento é garantido no sink, mas se a aba do médico cair antes de pedir, nada é gravado.
-- Fechar a aba sem sair da conferência **não encerra** a consulta. Encerrar ao sair da sala foi testado com um Jitsi simulado e no backend; o evento real `videoConferenceLeft` disparando o encerramento pelo app Angular ainda não foi exercitado.
+- Fechar a aba sem sair da conferência deixa a consulta em andamento até **5 minutos** sem sinal do médico; então o servidor a encerra (e o médico pode reabrir dentro de 10 minutos). O evento real `videoConferenceLeft` disparando o encerramento pelo app Angular ainda não foi exercitado num navegador com pessoas reais.
 - O texto transcrito passa pelo tópico de resultados (retenção de 24 h; TLS e ACL do broker não foram exercitados aqui). Nome do paciente e metadados estão **em claro** no banco; TDE/backup cifrado, KMS e uma rotina que recifre o histórico depois de rotacionar a chave ficam para a infraestrutura.
 - Job que falhou (`FALHA_NO_ENVIO`, `FALHA_NO_WORKER`) mantém o áudio (cifrado) até o teto de 7 dias e **não é reprocessado sozinho**; falta o reenvio.
 - Ao carregar o modelo, o worker consulta o huggingface.co (sem dado de paciente); com o modelo já baixado, `HF_HUB_OFFLINE=1` evita isso.
@@ -424,10 +471,10 @@ A lista completa, com os pontos de atenção de cada item, está em [`docs/tasks
 
 ## Roadmap
 
-Etapas mapeadas, **ainda não iniciadas**, para a próxima sequência (a integração por API key, o acesso do médico por link, a administração e o webhook de devolução estão propostos, com as decisões, em [`docs/plan.md`](docs/plan.md) como T16 a T19):
+Já feitas: T01 a T14, o consentimento obrigatório e **T16 a T19** (integração por API key, acesso do médico por link, administração e webhook de devolução). Mapeadas, **ainda não iniciadas**:
 
 1. **T15** Escala: vários JVBs, autoscaling dos workers (ou GPU) e teste de carga de 100 a 1.000 salas.
-2. **Endurecimentos:** gatilho da captura no servidor, encerramento por inatividade, login definitivo do médico, renovação do token de entrada, relay de e-mail de produção, container do worker e verificação com pessoas reais.
+2. **Endurecimentos:** gatilho da captura no servidor (e expulsão do paciente pelo Prosody), login definitivo do médico (por provedor de identidade), renovação do token de entrada, relay de e-mail de produção, container do worker e verificação com pessoas reais.
 
 ## Documentação
 

@@ -12,6 +12,7 @@ import br.com.medilink.repository.ConsultaRepository;
 import br.com.medilink.repository.TranscricaoJobRepository;
 import br.com.medilink.repository.TranscricaoRepository;
 import br.com.medilink.service.AuditService;
+import br.com.medilink.webhook.WebhookEventos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -80,13 +81,15 @@ public class ResultadoDaTranscricaoService {
 	private final AuditService auditoria;
 	private final ArmazenamentoDeAudio armazenamento;
 	private final TranscricaoProperties props;
+	private final WebhookEventos webhooks;
 	private final JsonMapper json;
 	private final Clock clock;
 	private final TransactionTemplate tx;
 
 	public ResultadoDaTranscricaoService(TranscricaoJobRepository jobs, TranscricaoRepository transcricoes,
 			AudioTransitorioRepository audios, ConsultaRepository consultas, AuditService auditoria,
-			ArmazenamentoDeAudio armazenamento, TranscricaoProperties props, JsonMapper json, Clock clock, PlatformTransactionManager txManager) {
+			ArmazenamentoDeAudio armazenamento, TranscricaoProperties props, JsonMapper json, Clock clock, PlatformTransactionManager txManager,
+			WebhookEventos webhooks) {
 		this.jobs = jobs;
 		this.transcricoes = transcricoes;
 		this.audios = audios;
@@ -94,6 +97,7 @@ public class ResultadoDaTranscricaoService {
 		this.auditoria = auditoria;
 		this.armazenamento = armazenamento;
 		this.props = props;
+		this.webhooks = webhooks;
 		this.json = json;
 		this.clock = clock;
 		this.tx = new TransactionTemplate(txManager);
@@ -134,6 +138,7 @@ public class ResultadoDaTranscricaoService {
 		if (!r.concluido()) {
 			job.falhouNoWorker(r.erro(), agora);
 			auditoria.registrar(ATOR, "TRANSCRICAO_FALHOU", recurso);
+			webhooks.registrar(job.getConsultaId(), WebhookEventos.INDISPONIVEL, "FALHA_NO_WORKER");
 			log.warn("Transcrição: o worker falhou na consulta {} ({}); o áudio foi mantido", job.getConsultaId(), r.erro());
 			return Desfecho.FALHA_NO_WORKER;
 		}
@@ -144,6 +149,7 @@ public class ResultadoDaTranscricaoService {
 		}
 		job.marcar(JobStatus.TRANSCRITO, agora);
 		auditoria.registrar(ATOR, "TRANSCRICAO_GRAVADA", recurso);
+		webhooks.registrar(job.getConsultaId(), WebhookEventos.CONCLUIDA, null);
 		return Desfecho.GRAVADA;
 	}
 

@@ -46,20 +46,24 @@ public class EmailService {
 
 	/** Sem @Transactional de propósito: a falha de envio precisa ser auditada mesmo lançando exceção. */
 	public Instant enviarLink(String medicoEmail, UUID agendamentoId) {
-		ParaEmail dados = agendamentos.paraEnvioDeEmail(medicoEmail, agendamentoId);
+		return enviarLink(medicoEmail, agendamentos.paraEnvioDeEmail(medicoEmail, agendamentoId));
+	}
+
+	/** Mesmo envio para quem já resolveu os dados (a API de integração, que autoriza pela API key). */
+	public Instant enviarLink(String ator, ParaEmail dados) {
 		if (dados.pacienteEmail() == null || dados.pacienteEmail().isBlank()) {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "O agendamento não tem e-mail do paciente.");
 		}
-		String recurso = "agendamento/" + agendamentoId;
+		String recurso = "agendamento/" + dados.agendamentoId();
 		try {
 			mail.send(montar(dados));
 		}
 		catch (MailException | MessagingException e) {
-			auditoria.registrar(medicoEmail, "EMAIL_LINK_FALHA", recurso);
+			auditoria.registrar(ator, "EMAIL_LINK_FALHA", recurso);
 			// Sem a causa na resposta: mensagens de SMTP podem citar o destinatário.
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Não foi possível enviar o e-mail.");
 		}
-		auditoria.registrar(medicoEmail, "EMAIL_LINK_ENVIADO", recurso);
+		auditoria.registrar(ator, "EMAIL_LINK_ENVIADO", recurso);
 		return Instant.now(clock);
 	}
 

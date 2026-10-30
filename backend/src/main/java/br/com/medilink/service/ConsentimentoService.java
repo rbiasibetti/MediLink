@@ -57,10 +57,11 @@ public class ConsentimentoService {
 			auditoria.registrar("paciente", retirou ? "CONSENTIMENTO_REVOGADO" : "CONSENTIMENTO_RECUSADO", recurso);
 			return new Situacao(false, null);
 		}
-		if (!termo.atual().versao().equals(versaoDoTermo)) {
+		var vigente = termo.atual();
+		if (!vigente.versao().equals(versaoDoTermo)) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "O termo foi atualizado. Leia a versão vigente.");
 		}
-		c.registrarConsentimento(Instant.now(clock), termo.atual().versao());
+		c.registrarConsentimento(Instant.now(clock), vigente.versao(), vigente.hash());
 		auditoria.registrar("paciente", "CONSENTIMENTO_REGISTRADO", recurso);
 		return new Situacao(true, c.getConsentimentoVersao());
 	}

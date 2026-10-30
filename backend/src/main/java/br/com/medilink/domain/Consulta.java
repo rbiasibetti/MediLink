@@ -37,6 +37,15 @@ public class Consulta {
 	@Column(name = "consentimento_versao", length = 20)
 	private String consentimentoVersao;
 
+	/** SHA-256 do texto do termo que o paciente aceitou: prova do que foi exibido, mesmo que o termo evolua. */
+	@org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
+	@Column(name = "consentimento_hash", length = 64)
+	private String consentimentoHash;
+
+	/** Último sinal de vida do médico (a tela dele consulta o estado a cada poucos segundos). */
+	@Column(name = "ultima_presenca_medico_em")
+	private Instant ultimaPresencaMedicoEm;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 30)
 	private ConsultaStatus status;
@@ -84,9 +93,14 @@ public class Consulta {
 				|| status == ConsultaStatus.EM_ANDAMENTO;
 	}
 
-	public void registrarConsentimento(Instant agora, String versaoDoTermo) {
+	public void registrarConsentimento(Instant agora, String versaoDoTermo, String hashDoTermo) {
 		this.consentimentoEm = agora.truncatedTo(ChronoUnit.MILLIS);
 		this.consentimentoVersao = versaoDoTermo;
+		this.consentimentoHash = hashDoTermo;
+	}
+
+	public String getConsentimentoHash() {
+		return consentimentoHash;
 	}
 
 	/** Retirada do consentimento (ou recusa após ter consentido): a captura deixa de ser autorizada. */
@@ -94,6 +108,7 @@ public class Consulta {
 		boolean tinha = consentimentoEm != null;
 		this.consentimentoEm = null;
 		this.consentimentoVersao = null;
+		this.consentimentoHash = null;
 		return tinha;
 	}
 
@@ -130,5 +145,24 @@ public class Consulta {
 		}
 		status = ConsultaStatus.EM_ANDAMENTO;
 		inicioEm = agora.truncatedTo(ChronoUnit.MILLIS);
+		ultimaPresencaMedicoEm = inicioEm;
+	}
+
+	public void registrarPresencaDoMedico(Instant agora) {
+		this.ultimaPresencaMedicoEm = agora.truncatedTo(ChronoUnit.MILLIS);
+	}
+
+	/** Reabre uma consulta encerrada dentro da tolerância: volta a andamento, sem fim, e o médico está presente. */
+	public void reabrir(Instant agora) {
+		if (status != ConsultaStatus.ENCERRADA) {
+			throw new IllegalStateException("Consulta não está encerrada: " + status);
+		}
+		status = ConsultaStatus.EM_ANDAMENTO;
+		fimEm = null;
+		ultimaPresencaMedicoEm = agora.truncatedTo(ChronoUnit.MILLIS);
+	}
+
+	public Instant getUltimaPresencaMedicoEm() {
+		return ultimaPresencaMedicoEm;
 	}
 }

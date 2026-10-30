@@ -35,6 +35,7 @@ public class AcessoService {
 
 	private final AgendamentoRepository agendamentos;
 	private final ConsultaRepository consultas;
+	private final ValidadeDoLink validade;
 	private final TentativaCpfRepository tentativas;
 	private final CpfHasher cpfHasher;
 	private final EntradaTokenService tokens;
@@ -42,9 +43,10 @@ public class AcessoService {
 	private final Clock clock;
 
 	public AcessoService(AgendamentoRepository agendamentos, ConsultaRepository consultas, TentativaCpfRepository tentativas, CpfHasher cpfHasher,
-			EntradaTokenService tokens, AuditService auditoria, Clock clock) {
+			EntradaTokenService tokens, AuditService auditoria, Clock clock, ValidadeDoLink validade) {
 		this.agendamentos = agendamentos;
 		this.consultas = consultas;
+		this.validade = validade;
 		this.tentativas = tentativas;
 		this.cpfHasher = cpfHasher;
 		this.tokens = tokens;
@@ -108,7 +110,8 @@ public class AcessoService {
 	}
 
 	private java.util.Optional<Agendamento> ativo(String roomName) {
-		return agendamentos.findByRoomName(roomName).filter(a -> a.getStatus() == AgendamentoStatus.AGENDADO);
+		return agendamentos.findByRoomName(roomName).filter(a -> a.getStatus() == AgendamentoStatus.AGENDADO)
+				.filter(a -> consultas.findByAgendamentoId(a.getId()).map(c -> !validade.expirado(a, c)).orElse(false));
 	}
 
 	private static ResponseStatusException negado() {

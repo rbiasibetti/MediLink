@@ -1,9 +1,12 @@
 package br.com.medilink.service;
 
+import br.com.medilink.config.ConsultaProperties;
 import br.com.medilink.domain.Consulta;
 import br.com.medilink.domain.ConsultaStatus;
+import br.com.medilink.domain.JobStatus;
 import br.com.medilink.repository.ConsultaRepository;
 import br.com.medilink.repository.MedicoRepository;
+import br.com.medilink.repository.TranscricaoJobRepository;
 import br.com.medilink.transcricao.TranscricaoJobService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,9 +21,10 @@ import java.util.UUID;
 @Service
 public class ConsultaService {
 
+	/** {@code podeReabrir}: encerrada há pouco e ainda sem transcrição enviada; o médico pode voltar à consulta (T17). */
 	public record Detalhe(UUID id, String roomName, ConsultaStatus status, Instant inicioEm, Instant fimEm,
 			boolean pacienteAguardando,
-			Instant consentimentoEm, String consentimentoVersao, boolean capturaAutorizada) {
+			Instant consentimentoEm, String consentimentoVersao, boolean capturaAutorizada, boolean podeReabrir) {
 	}
 
 	private final ConsultaRepository consultas;
@@ -28,19 +32,73 @@ public class ConsultaService {
 	private final AuditService auditoria;
 	private final Clock clock;
 	private final TranscricaoJobService jobs;
+	private final TranscricaoJobRepository jobRepo;
+	private final ConsultaProperties props;
 
 	public ConsultaService(ConsultaRepository consultas, MedicoRepository medicos, AuditService auditoria, Clock clock,
-			TranscricaoJobService jobs) {
+			TranscricaoJobService jobs, TranscricaoJobRepository jobRepo, ConsultaProperties props) {
 		this.consultas = consultas;
 		this.medicos = medicos;
 		this.auditoria = auditoria;
 		this.clock = clock;
 		this.jobs = jobs;
+		this.jobRepo = jobRepo;
+		this.props = props;
 	}
 
-	@Transactional(readOnly = true)
+	/**
+	 * A tela do médico consulta isto a cada poucos segundos; cada chamada é também o sinal de vida dele. Sem sinal por
+	 * {@code inatividadeDoMedico}, o servidor encerra a consulta em andamento (aba fechada, queda de internet).
+	 */
+	@Transactional
 	public Detalhe detalhe(String medicoEmail, UUID consultaId) {
-		return detalhe(daMedico(medicoEmail, consultaId));
+		Consulta c = daMedico(medicoEmail, consultaId);
+		if (c.getStatus() == ConsultaStatus.EM_ANDAMENTO) {
+			c.registrarPresencaDoMedico(Instant.now(clock));
+		}
+		return detalhe(c);
+	}
+
+	/**
+	 * Reabre uma consulta encerrada há pouco (por engano ou queda). Só enquanto o job de transcrição ainda não foi
+	 * publicado (a janela de tolerância); reabrir cancela o job, que é recriado no próximo encerramento. O consentimento
+	 * é mantido e o áudio já capturado fica, para entrar junto na transcrição final.
+	 */
+	@Transactional
+	public Detalhe reabrir(String medicoEmail, UUID consultaId) {
+		Consulta c = daMedico(medicoEmail, consultaId);
+		if (c.getStatus() == ConsultaStatus.EM_ANDAMENTO) {
+			return detalhe(c);
+		}
+		if (!podeReabrir(c)) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "O prazo para reabrir esta consulta terminou.");
+		}
+		Instant agora = Instant.now(clock);
+		jobRepo.findByConsultaId(c.getId()).ifPresent(jobRepo::delete);
+		c.reabrir(agora);
+		auditoria.registrar(medicoEmail, "CONSULTA_REABERTA", "consulta/" + c.getId());
+		return detalhe(c);
+	}
+
+	/** Encerra as consultas em andamento cujo médico sumiu. Chamado pela rotina de inatividade; devolve quantas. */
+	@Transactional
+	public int encerrarInativas() {
+		Instant agora = Instant.now(clock);
+		var inativas = consultas.findByStatusAndUltimaPresencaMedicoEmBefore(ConsultaStatus.EM_ANDAMENTO, agora.minus(props.inatividadeDoMedico()));
+		for (Consulta c : inativas) {
+			c.encerrar(agora);
+			auditoria.registrar("sistema", "CONSULTA_ENCERRADA_INATIVIDADE", "consulta/" + c.getId());
+			jobs.criarAoEncerrar(c.getId());
+		}
+		return inativas.size();
+	}
+
+	private boolean podeReabrir(Consulta c) {
+		if (c.getStatus() != ConsultaStatus.ENCERRADA || c.getFimEm() == null) {
+			return false;
+		}
+		boolean dentroDoPrazo = !Instant.now(clock).isAfter(c.getFimEm().plus(props.toleranciaReabertura()));
+		return dentroDoPrazo && jobRepo.findByConsultaId(c.getId()).map(j -> j.getStatus() == JobStatus.PENDENTE).orElse(false);
 	}
 
 	/**
@@ -94,9 +152,9 @@ public class ConsultaService {
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 	}
 
-	private static Detalhe detalhe(Consulta c) {
+	private Detalhe detalhe(Consulta c) {
 		return new Detalhe(c.getId(), c.getAgendamento().getRoomName(), c.getStatus(), c.getInicioEm(), c.getFimEm(),
 				c.getStatus() == ConsultaStatus.AGUARDANDO_PACIENTE, c.getConsentimentoEm(), c.getConsentimentoVersao(),
-				c.capturaAutorizada());
+				c.capturaAutorizada(), podeReabrir(c));
 	}
 }

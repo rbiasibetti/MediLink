@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { MedicoAuth } from './medico-auth';
@@ -27,7 +27,15 @@ export interface ConsultaDetalhe {
   id: string; roomName: string; status: string; inicioEm: string | null; fimEm: string | null;
   pacienteAguardando: boolean; consentimentoEm: string | null; consentimentoVersao: string | null;
   capturaAutorizada: boolean;
+  /** Encerrada há pouco e ainda sem transcrição enviada: o médico pode reabrir. */
+  podeReabrir: boolean;
 }
+/** Resposta da troca do link de uso único do médico por uma sessão presa à consulta. */
+export interface SessaoLink {
+  sessao: string; expiraEm: string; agendamentoId: string; consultaId: string; modo: 'SALA' | 'LEITURA'; medicoNome: string;
+}
+export interface SegmentoTranscricao { papel: string; inicioMs: number; fimMs: number; texto: string }
+export interface TranscricaoLida { consultaId: string; idioma: string; duracaoMs: number; criadaEm: string; texto: string; segmentos: SegmentoTranscricao[] }
 
 /** Cliente da API do MediLink. As rotas de paciente são públicas; as de médico levam o Basic provisório. */
 @Injectable({ providedIn: 'root' })
@@ -91,6 +99,21 @@ export class Api {
   /** Informa o endpoint do Jitsi do médico (para rotular as falas na transcrição). */
   registrarParticipanteMedico(consultaId: string, endpointId: string): Observable<{ papel: string }> {
     return this.http.post<{ papel: string }>(`/api/consultas/${consultaId}/participante`, { endpointId }, { headers: this.auth.headers() });
+  }
+
+  /** Pública: quem tem o link de uso único (poucos minutos) recebe a sessão da consulta. */
+  trocarLink(token: string): Observable<SessaoLink> {
+    return this.http.post<SessaoLink>('/api/medico/sessao', { token });
+  }
+
+  reabrir(consultaId: string): Observable<ConsultaDetalhe> {
+    return this.http.post<ConsultaDetalhe>(`/api/consultas/${consultaId}/reabrir`, null, { headers: this.auth.headers() });
+  }
+
+  /** 200 com a transcrição; 202 enquanto o worker processa (corpo `{status}`). Erros chegam como HttpErrorResponse. */
+  transcricao(consultaId: string): Observable<HttpResponse<TranscricaoLida | { status: string }>> {
+    return this.http.get<TranscricaoLida | { status: string }>(`/api/consultas/${consultaId}/transcricao`,
+      { headers: this.auth.headers(), observe: 'response' });
   }
 
   encerrar(consultaId: string): Observable<ConsultaDetalhe> {

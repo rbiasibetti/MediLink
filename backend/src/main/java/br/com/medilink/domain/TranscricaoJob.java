@@ -35,6 +35,10 @@ public class TranscricaoJob {
 	@Column(name = "atualizado_em", nullable = false)
 	private Instant atualizadoEm;
 
+	/** Só depois deste instante o job pode ser publicado (janela de tolerância para o médico reabrir a consulta). */
+	@Column(name = "elegivel_em")
+	private Instant elegivelEm;
+
 	/** Só o tipo da exceção, nunca mensagem (poderia carregar conteúdo). */
 	@Column(name = "ultimo_erro", length = 200)
 	private String ultimoErro;
@@ -48,6 +52,23 @@ public class TranscricaoJob {
 		this.status = JobStatus.PENDENTE;
 		this.criadoEm = agora.truncatedTo(ChronoUnit.MILLIS);
 		this.atualizadoEm = this.criadoEm;
+	}
+
+	/** O administrador recoloca na fila um job que falhou (o áudio foi mantido): volta a PENDENTE e zera as tentativas. */
+	public void reenfileirar(Instant agora) {
+		this.status = JobStatus.PENDENTE;
+		this.tentativas = 0;
+		this.ultimoErro = null;
+		this.elegivelEm = null;
+		this.atualizadoEm = agora.truncatedTo(ChronoUnit.MILLIS);
+	}
+
+	public void elegivelAPartirDe(Instant quando) {
+		this.elegivelEm = quando.truncatedTo(ChronoUnit.MILLIS);
+	}
+
+	public Instant getElegivelEm() {
+		return elegivelEm;
 	}
 
 	public void marcar(JobStatus novo, Instant agora) {
