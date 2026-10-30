@@ -49,7 +49,7 @@ O projeto segue **SDD (Spec-Driven Development)**: especificação → plano té
 | Consulta | **T09** Consentimento antes da captura | Pronta |
 | Consulta | **T10** Frontend Angular e encerramento da consulta | Pronta (ver [limitações](#limitações-conhecidas)) |
 | Transcrição | **T11** Audio sink (captura do áudio no servidor) | Pronta |
-| Transcrição | **T12** Fila e worker de transcrição (faster-whisper) | Mapeada, não iniciada |
+| Transcrição | **T12** Fila e worker de transcrição (faster-whisper) | Pronta |
 | Transcrição | **T13** Gravar a transcrição e descartar o áudio | Mapeada, não iniciada |
 | Compliance | **T14** Criptografia em repouso, auditoria de leitura, retenção | Mapeada, não iniciada |
 | Escala | **T15** Vários JVBs, autoscaling e teste de carga (até 1.000 salas) | Mapeada, não iniciada |
@@ -65,7 +65,7 @@ O estado detalhado de cada tarefa, com o que foi e o que **não** foi verificado
 | RF-03 | Envio do link ao paciente por e-mail, com registro | Feito |
 | RF-04 | O paciente confirma o CPF (desativável pelo médico); limite de tentativas e resposta genérica para não revelar o que existe | Feito |
 | RF-05 | O paciente aguarda e só recebe a credencial da sala depois do aceite explícito do médico | Feito |
-| RF-06 | O áudio é capturado durante a consulta e transcrito de forma assíncrona após o encerramento | Captura feita (T11); fila e transcrição na T12 |
+| RF-06 | O áudio é capturado durante a consulta e transcrito de forma assíncrona após o encerramento | Feito (captura na T11; fila e transcrição na T12) |
 | RF-07 | A transcrição é gravada no banco e o arquivo de áudio é descartado | Pendente (T13) |
 | RF-08 | O consentimento é coletado e registrado (com a versão do termo) antes da captura | Feito |
 
@@ -89,6 +89,8 @@ flowchart LR
     end
     DB[("SQL Server")]
     D[("Áudio transitório<br/>Ogg Opus")]
+    K[("Fila<br/>Redpanda / Kafka")]
+    WK["Worker<br/>faster-whisper"]
 
     A -- "REST /api" --> API
     A -- "iframe + JWT por sala" --> W
@@ -97,6 +99,10 @@ flowchart LR
     S -- "só com consentimento" --> D
     S --> DB
     API -. "assina o JWT" .-> P
+    API -- "job ao encerrar" --> K
+    K --> WK
+    D -- "lê o áudio" --> WK
+    WK -- "texto por locutor" --> K
 ```
 
 ### Fluxo de uma consulta
@@ -108,6 +114,8 @@ sequenceDiagram
     participant Pa as Paciente (Angular)
     participant J as Jitsi (Prosody / JVB)
     participant S as Audio sink
+    participant K as Fila (Redpanda/Kafka)
+    participant W as Worker (faster-whisper)
 
     M->>B: agenda (nome, CPF, data) e envia o link por e-mail
     Pa->>B: abre o link e confirma o CPF
@@ -125,6 +133,10 @@ sequenceDiagram
     S->>B: confere consentimento e consulta em andamento
     S->>S: grava um arquivo Ogg Opus por participante
     M->>B: sai da sala, a consulta é encerrada
+    B->>K: job de transcrição (só referências aos arquivos)
+    K->>W: job
+    W->>W: transcreve cada fonte e rotula o locutor
+    W->>K: texto por locutor (resultado)
 ```
 
 Os fluxos e as decisões estão detalhados em [`docs/plan.md`](docs/plan.md).
@@ -138,7 +150,7 @@ Os fluxos e as decisões estão detalhados em [`docs/plan.md`](docs/plan.md).
 | Frontend | Angular 21 (standalone, zoneless, signals), Vitest, IFrame External API do Jitsi |
 | Vídeo | Jitsi Meet self-hosted (imagens oficiais `ghcr.io/jitsi`), Docker ou Podman |
 | Captura de áudio | Sink WebSocket no backend (protocolo `mediajson`), gravador Ogg Opus próprio |
-| Transcrição (planejada) | `faster-whisper` (modelo `turbo`, CPU), Redpanda/Kafka |
+| Transcrição | Worker Python 3.12 com `faster-whisper` (modelo `turbo`, CPU `int8`), fila Redpanda (dev) / Kafka (produção) |
 
 ## Estrutura do repositório
 
@@ -156,10 +168,11 @@ MediLink/
 │   ├── config/local.env.example   modelo da conexão com o SQL Server local
 │   └── run-mssql.sh               roda testes e a aplicação contra o SQL Server local
 ├── frontend/                      Angular 21 (telas do médico e do paciente)
+├── worker/                        worker de transcrição (Python, faster-whisper, consumidor Kafka)
 ├── infra/
 │   ├── jitsi/                     Jitsi self-hosted: compose, .env, regras de nginx, módulo Prosody, config do Jicofo
 │   │   └── e2e/                   verificação ponta a ponta (Chrome headless com microfone falso)
-│   └── dev/smtp_sink.py           servidor SMTP de desenvolvimento
+│   └── dev/                       smtp_sink.py (SMTP de desenvolvimento) e redpanda.sh (broker de desenvolvimento)
 └── docs/
     ├── spec.md                    especificação (o quê e por quê)
     ├── plan.md                    plano técnico e registro de decisões (o como)
@@ -174,6 +187,7 @@ MediLink/
 | Node.js | 20.19 ou superior (Angular 21); o CLI 22 exige Node 22+ |
 | SQL Server | 2019 ou superior, acessível em `localhost:1433` |
 | Docker ou Podman | para o Jitsi; com Podman rootless é preciso o socket do usuário (`systemctl --user start podman.socket`) e o `docker-compose` |
+| Python | 3.12 com `venv` (worker de transcrição) |
 | Google Chrome | só para a verificação ponta a ponta (`infra/jitsi/e2e`) |
 
 ## Como executar
@@ -227,7 +241,18 @@ python3 infra/dev/smtp_sink.py 1025 infra/dev/mails
 
 Recebe os e-mails do link e os grava como `.eml` em `infra/dev/mails/`.
 
-### 5. Frontend
+### 5. Fila e worker de transcrição
+
+```bash
+infra/dev/redpanda.sh up                          # broker em localhost:9092 e os dois tópicos (imagem ~120 MB)
+cd worker
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m medilink_worker               # a 1ª execução baixa o modelo Whisper turbo (~1,6 GB)
+```
+
+Detalhes e configuração em [`worker/README.md`](worker/README.md). Sem o broker o backend continua funcionando: o job fica pendente e é reenviado quando ele voltar.
+
+### 6. Frontend
 
 ```bash
 cd frontend
@@ -238,13 +263,14 @@ npx ng serve       # http://localhost:4200, com proxy de /api para o backend em 
 - Médico: `http://localhost:4200/medico`
 - Paciente: o link gerado no agendamento (`http://localhost:4200/sala/{roomName}`)
 
-### 6. Roteiro de teste manual
+### 7. Roteiro de teste manual
 
 1. Entre como médico, crie um agendamento (data futura) e clique em **Entrar na sala**.
 2. Abra o link do paciente em outra aba ou navegador, confirme o CPF e aceite o termo.
 3. Como médico, clique em **Aceitar paciente**. O paciente entra na mesma sala.
 4. O médico sai da sala (botão de desligar): a consulta deve ser encerrada.
 5. Os arquivos de áudio ficam em `${MEDILINK_SINK_DIR:-/tmp/medilink-audio}/{consultaId}/`.
+6. Com o worker no ar, o texto da consulta (por locutor) aparece no tópico `medilink.transcricao.resultados` (`podman exec medilink-redpanda rpk topic consume medilink.transcricao.resultados -n 1`).
 
 ## Configuração
 
@@ -258,6 +284,7 @@ npx ng serve       # http://localhost:4200, com proxy de /api para o backend em 
 | `MEDILINK_JITSI_APP_ID`, `MEDILINK_JITSI_AUDIENCE`, `MEDILINK_JITSI_XMPP_DOMAIN` | não | Padrões `medilink`, `jitsi`, `meet.jitsi`; devem casar com o `.env` do Jitsi |
 | `MEDILINK_SINK_TOKEN` | sim | Segredo que o Jicofo envia ao sink (`SINK_TOKEN` do Jitsi) |
 | `MEDILINK_SINK_DIR` | não | Pasta dos arquivos de áudio transitórios (padrão `${java.io.tmpdir}/medilink-audio`) |
+| `MEDILINK_KAFKA_BOOTSTRAP` | não | Broker da fila de transcrição (padrão `localhost:9092`) |
 | `MEDILINK_PUBLIC_BASE_URL` | não | Base do link enviado ao paciente (padrão `http://localhost:4200`) |
 | `MEDILINK_MAIL_HOST`, `MEDILINK_MAIL_PORT`, `MEDILINK_MAIL_USER`, `MEDILINK_MAIL_PASSWORD`, `MEDILINK_MAIL_FROM` | não | Relay SMTP (padrão `localhost:1025`) |
 
@@ -291,7 +318,8 @@ Rotas do **médico** exigem autenticação (HTTP Basic provisório); as do **pac
 | `GET` | `/api/me` | médico | Nome e e-mail do médico autenticado |
 | `GET` | `/api/consultas/{id}` | médico | Estado da consulta e se há paciente aguardando |
 | `POST` | `/api/consultas/{id}/aceite` | médico | Admite o paciente (idempotente) |
-| `POST` | `/api/consultas/{id}/encerrar` | médico | Encerra a consulta em andamento (idempotente) |
+| `POST` | `/api/consultas/{id}/encerrar` | médico | Encerra a consulta em andamento (idempotente) e cria o job de transcrição |
+| `POST` | `/api/consultas/{id}/participante` | médico ou paciente | O cliente informa o próprio endpoint do Jitsi; o papel vem da autenticação (médico autenticado; paciente com o token de entrada no corpo) |
 | `GET` | `/api/salas/{roomName}/acesso` | paciente | Dados mínimos da tela de acesso |
 | `POST` | `/api/salas/{roomName}/validar-cpf` | paciente | Valida o CPF e devolve o token de entrada |
 | `POST` | `/api/salas/{roomName}/token` | paciente | `202` enquanto aguarda o aceite; `200` com o JWT depois |
@@ -309,6 +337,7 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 - **Aceite no backend**: a credencial do Jitsi do paciente só é emitida depois do aceite do médico. Como a sala do Jitsi nasce aberta, esse portão fica no backend, e sem JWT ninguém entra.
 - **Interface do Jitsi não exposta**: navegação direta (`Sec-Fetch-Dest: document`) recebe 403 e só o iframe do MediLink carrega a interface; `frame-ancestors` restringe quem pode embutir. É uma camada de ocultação; **a fronteira de segurança é o JWT**.
 - **Consentimento**: termo versionado, com a versão gravada junto da data; o paciente pode recusar ou retirar. O **audio sink confere o consentimento por conta própria** a cada segundo e descarta o áudio sem ele, independentemente de quem pediu a exportação.
+- **Fila e worker**: o job só tem referências (nada de áudio, texto, CPF ou nome); o worker valida o caminho do arquivo, nunca registra o texto em log e, em falha, devolve só o tipo do erro. O **resultado carrega o texto da consulta** (dado sensível de saúde): o tópico precisa de controle de acesso e cifragem (T14).
 - **Auditoria**: criação, aceite, consentimento, emissão de token, e-mail e captura são registrados sem dado sensível. A auditoria de **leitura** é da T14.
 - **Criptografia de ponta a ponta (E2EE)**: **desligada por padrão**, por decisão registrada em [`docs/plan.md`](docs/plan.md). A captura do áudio no servidor é incompatível com E2EE; a mídia continua cifrada em trânsito (DTLS-SRTP e TLS) até o servidor de vídeo, que é da própria clínica. Existe um flag no frontend para ligá-la, ao custo de a captura deixar de funcionar.
 - **Segredos**: nenhum valor secreto é versionado (`infra/jitsi/.env` e `backend/config/local.env` ficam fora do git).
@@ -318,15 +347,21 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 O banco dos testes é **sempre o SQL Server local** (`medilink_test`); não há banco em memória.
 
 ```bash
-# backend: 102 testes (unitários e de integração, inclusive o audio sink com servidor real)
+# backend: 118 testes (unitários e de integração: audio sink com servidor real e fila no Redpanda local)
 cd backend && ./run-mssql.sh test
 ./run-mssql.sh test -Dtest=ConsultaAceiteApiTest    # só uma classe
 
-# frontend: 33 testes (Vitest)
+# worker de transcrição: 30 testes (sem modelo e sem broker)
+cd worker && .venv/bin/python -m pytest -q
+
+# frontend: 38 testes (Vitest)
 cd frontend && npx ng test --watch=false
 
 # ponta a ponta com Jitsi real (pare o ng serve antes: a porta 4200 precisa estar livre)
 python3 -I infra/jitsi/e2e/verify_t11.py 'medico@medilink.local:dev-only-change-me'
+
+# ponta a ponta da transcrição: fala em português pelo Jitsi até o texto no tópico (veja os pré-requisitos no cabeçalho)
+worker/.venv/bin/python infra/jitsi/e2e/verify_t12.py 'medico@medilink.local:dev-only-change-me' medico.wav paciente.wav
 ```
 
 Scripts de verificação contra o Prosody real (precisam do Jitsi e do backend em dev no ar):
@@ -337,6 +372,7 @@ Scripts de verificação contra o Prosody real (precisam do Jitsi e do backend e
 | `infra/jitsi/verify_t07.py` | Médico entra como moderador e paciente sem moderação |
 | `infra/jitsi/verify_t08.py` | O paciente só entra depois do aceite, mesmo chegando antes do médico |
 | `infra/jitsi/e2e/verify_t11.py` | Com consentimento grava um Ogg Opus válido por participante, nada antes do aceite; sem consentimento, nada |
+| `infra/jitsi/e2e/verify_t12.py` | Médico e paciente falam trechos diferentes em português; o texto chega ao tópico com o locutor certo e na ordem certa; sem consentimento nada é transcrito |
 
 ## Decisões de arquitetura
 
@@ -355,7 +391,9 @@ As decisões e o raciocínio estão em [`docs/plan.md`](docs/plan.md). As princi
 
 - O **gatilho da captura** é a página do médico. O consentimento é garantido no sink, mas se a aba do médico cair antes de pedir, nada é gravado.
 - Fechar a aba sem sair da conferência **não encerra** a consulta. Encerrar ao sair da sala foi testado com um Jitsi simulado e no backend; o evento real `videoConferenceLeft` disparando o encerramento pelo app Angular ainda não foi exercitado.
-- O áudio ainda **não é descartado** (T13) e ainda não é transcrito (T12).
+- O texto transcrito fica só no tópico de resultados até a T13 gravá-lo no banco; o áudio ainda **não é descartado** (T13).
+- A transcrição custa ≈ 2× o tempo real por fonte em CPU (8 núcleos); o worker roda no host e o vocabulário médico não foi avaliado.
+- O mapa de quem é médico e quem é paciente é informado pelo cliente (o papel vem da autenticação, o endpoint vem do navegador).
 - O login do médico é **HTTP Basic provisório**; o mecanismo definitivo está em aberto.
 - Não há listagem, edição ou cancelamento de agendamentos na interface.
 - O token de entrada do paciente dura 10 minutos; se o aceite demorar mais, ele repete o CPF.
@@ -369,11 +407,10 @@ A lista completa, com os pontos de atenção de cada item, está em [`docs/tasks
 
 Etapas mapeadas, **ainda não iniciadas**, para a próxima sequência:
 
-1. **T12** Fila (Redpanda no desenvolvimento, Kafka em produção) e worker `faster-whisper` (modelo `turbo`, CPU, português do Brasil, VAD), identificando médico e paciente por fonte.
-2. **T13** Gravar a transcrição no banco e descartar o áudio de forma idempotente; endpoint de leitura da transcrição.
-3. **T14** Compliance: criptografia em repouso e TLS interno, auditoria de leitura, retenção e limpeza.
-4. **T15** Escala: vários JVBs, autoscaling dos workers e teste de carga de 100 a 1.000 salas.
-5. **Endurecimentos:** gatilho da captura no servidor, encerramento por inatividade, login definitivo do médico, renovação do token de entrada, relay de e-mail de produção e verificação com pessoas reais.
+1. **T13** Consumir o resultado da fila, gravar a `Transcricao` no banco e descartar o áudio de forma idempotente; endpoint de leitura da transcrição.
+2. **T14** Compliance: criptografia em repouso (áudio, transcrição, backups, tópico) e TLS interno, auditoria de leitura, retenção e limpeza.
+3. **T15** Escala: vários JVBs, autoscaling dos workers (ou GPU) e teste de carga de 100 a 1.000 salas.
+4. **Endurecimentos:** gatilho da captura no servidor, encerramento por inatividade, login definitivo do médico, renovação do token de entrada, relay de e-mail de produção, container do worker e verificação com pessoas reais.
 
 ## Documentação
 

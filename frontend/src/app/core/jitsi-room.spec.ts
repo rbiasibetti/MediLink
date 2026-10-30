@@ -6,14 +6,14 @@ import { JitsiRoom, Papel } from './jitsi-room';
 /** Jitsi falso: guarda os ouvintes e os comandos para conferir o que a sala configura. */
 class JitsiFalso {
   static ultimo: JitsiFalso;
-  readonly ouvintes = new Map<string, () => void>();
+  readonly ouvintes = new Map<string, (dados?: { id?: string }) => void>();
   readonly comandos: [string, unknown[]][] = [];
   disposed = false;
   constructor(readonly dominio: string, readonly opcoes: Record<string, unknown>) { JitsiFalso.ultimo = this; }
-  addEventListener(evento: string, fn: () => void) { this.ouvintes.set(evento, fn); }
+  addEventListener(evento: string, fn: (dados?: { id?: string }) => void) { this.ouvintes.set(evento, fn); }
   executeCommand(comando: string, ...args: unknown[]) { this.comandos.push([comando, args]); }
   dispose() { this.disposed = true; }
-  disparar(evento: string) { this.ouvintes.get(evento)?.(); }
+  disparar(evento: string, dados?: { id?: string }) { this.ouvintes.get(evento)?.(dados); }
   comandosNomeados() { return this.comandos.map(([c]) => c); }
 }
 
@@ -25,9 +25,10 @@ async function montar(papel: Papel, e2ee?: boolean, transcrever?: boolean) {
   fixture.componentRef.setInput('papel', papel);
   if (e2ee !== undefined) fixture.componentRef.setInput('e2ee', e2ee);
   if (transcrever !== undefined) fixture.componentRef.setInput('transcrever', transcrever);
-  const eventos = { pronto: 0, saiu: 0 };
+  const eventos = { pronto: 0, saiu: 0, participante: [] as string[] };
   fixture.componentInstance.pronto.subscribe(() => eventos.pronto++);
   fixture.componentInstance.saiu.subscribe(() => eventos.saiu++);
+  fixture.componentInstance.participante.subscribe((id) => eventos.participante.push(id));
   fixture.detectChanges();
   await vi.waitFor(() => expect(JitsiFalso.ultimo).toBeDefined());
   return { fixture, eventos, jitsi: JitsiFalso.ultimo };
@@ -131,6 +132,22 @@ describe('JitsiRoom', () => {
     await fixture.whenStable();
     expect(contar(false)).toBe(1);
     expect(jitsi.comandos.at(-1)).toEqual(['setSubtitles', [false, false]]);
+  });
+
+  it('informa o próprio endpoint do Jitsi ao entrar (para rotular o áudio)', async () => {
+    const { jitsi, eventos } = await montar('paciente');
+
+    jitsi.disparar('videoConferenceJoined', { id: '7bc45eb8' });
+
+    expect(eventos.participante).toEqual(['7bc45eb8']);
+  });
+
+  it('sem id no evento não informa participante nenhum', async () => {
+    const { jitsi, eventos } = await montar('medico');
+
+    jitsi.disparar('videoConferenceJoined');
+
+    expect(eventos.participante).toEqual([]);
   });
 
   it('não manda comando de transcrição antes de entrar na conferência', async () => {

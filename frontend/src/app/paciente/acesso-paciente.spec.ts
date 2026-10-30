@@ -16,6 +16,7 @@ class JitsiStub {
   readonly papel = input.required<string>();
   readonly transcrever = input(false);
   readonly pronto = output<void>();
+  readonly participante = output<string>();
   readonly saiu = output<void>();
 }
 
@@ -128,6 +129,26 @@ describe('AcessoPaciente', () => {
     expect(stub).not.toBeNull();
     expect(stub.componentInstance.jwt()).toBe('JWT-DO-PACIENTE');
     expect(stub.componentInstance.papel()).toBe('paciente');
+  });
+
+  it('informa ao backend o endpoint do Jitsi do paciente, com o token de entrada', async () => {
+    const api = {
+      acesso: vi.fn(() => of(acesso(false))),
+      validarCpf: vi.fn(() => of({ tokenEntrada: 'tok', expiraEm: 'x' })),
+      termo: vi.fn(() => of({ versao: 'v1', texto: 'TERMO' })),
+      tokenPaciente: vi.fn(() => of(admitido)),
+      consentir: vi.fn(() => of({ consentimentoVigente: true, versaoDoTermo: 'v1' })),
+      registrarParticipantePaciente: vi.fn(() => of({ papel: 'PACIENTE' })),
+    };
+    const f = montar(api);
+    await assentar(f);
+    clicar(f, 'Aceito');
+    await assentar(f);
+
+    f.debugElement.query(By.directive(JitsiStub)).componentInstance.participante.emit('d88aeac9');
+    await assentar(f);
+
+    expect(api.registrarParticipantePaciente).toHaveBeenCalledWith('c1', 'tok', 'd88aeac9');
   });
 
   it('recusar o termo também libera a entrada, sem transcrição', async () => {

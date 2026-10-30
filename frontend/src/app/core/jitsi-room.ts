@@ -4,7 +4,7 @@ import { ALTURA_VIDEO_NIVEL_2, E2EE_ATIVA_POR_PADRAO, JITSI_DOMAIN } from './con
 export type Papel = 'medico' | 'paciente';
 
 interface JitsiApi {
-  addEventListener(evento: string, handler: () => void): void;
+  addEventListener(evento: string, handler: (dados?: { id?: string }) => void): void;
   executeCommand(comando: string, ...args: unknown[]): void;
   dispose(): void;
 }
@@ -65,6 +65,8 @@ export class JitsiRoom implements OnDestroy {
    */
   readonly transcrever = input(false);
   readonly pronto = output<void>();
+  /** Id do próprio participante no Jitsi (o "endpointId" que o JVB usa para identificar a fonte de áudio). */
+  readonly participante = output<string>();
   readonly saiu = output<void>();
 
   protected readonly dominio = JITSI_DOMAIN;
@@ -106,15 +108,16 @@ export class JitsiRoom implements OnDestroy {
         this.saiu.emit();
       }
     };
-    this.api.addEventListener('videoConferenceJoined', () => this.configurarSala());
+    this.api.addEventListener('videoConferenceJoined', (dados) => this.configurarSala(dados?.id));
     this.api.addEventListener('videoConferenceLeft', sair);
     this.api.addEventListener('readyToClose', sair);
   }
 
   /** Preferências da sala aplicadas ao entrar. Se a E2EE estiver ligada, só o moderador (médico) a aciona. */
-  private configurarSala(): void {
+  private configurarSala(meuId?: string): void {
     const api = this.api;
     if (!api) return;
+    if (meuId) this.participante.emit(meuId);
     api.executeCommand('setVideoQuality', ALTURA_VIDEO_NIVEL_2);
     api.executeCommand('setNoiseSuppressionEnabled', { enabled: true });
     if (this.e2ee() && this.papel() === 'medico') {

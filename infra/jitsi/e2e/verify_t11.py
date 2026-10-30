@@ -15,6 +15,7 @@ import functools
 import http.server
 import json
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -105,13 +106,16 @@ def ler_ogg(caminho):
 
 
 # ---- navegador de teste ----
-def abrir_chrome(room, jwt, pedir, ate, perfil):
+def abrir_chrome(room, jwt, pedir, ate, perfil, wav=None, log=None):
+    """Chrome headless de teste. Com `wav`, o microfone falso toca esse arquivo (uma vez) em vez do bipe;
+    com `log`, o console do navegador (inclusive as linhas "HARNESS ...") vai para esse arquivo."""
     url = f"http://localhost:4200/harness.html#room={room}&jwt={jwt}&pedir={1 if pedir else 0}&ate={ate}"
-    return subprocess.Popen(
-        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", f"--user-data-dir={perfil}",
-         "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--ignore-certificate-errors",
-         "--autoplay-policy=no-user-gesture-required", "--enable-logging=stderr", "--v=0", url],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    args = [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", f"--user-data-dir={perfil}",
+            "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--ignore-certificate-errors",
+            "--autoplay-policy=no-user-gesture-required", "--enable-logging=stderr", "--v=0"]
+    if wav:
+        args.append(f"--use-file-for-fake-audio-capture={wav}%noloop")
+    return subprocess.Popen(args + [url], stdout=subprocess.DEVNULL, stderr=open(log, "w") if log else subprocess.DEVNULL)
 
 
 def cenario(auth, nome, consentir):
@@ -127,7 +131,8 @@ def cenario(auth, nome, consentir):
         st, _ = api(f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": ent["tokenEntrada"], "aceito": True, "versaoTermo": "v1"})
         conferir("paciente consente", st == 200)
 
-    perfis, procs = [tempfile.mkdtemp(), tempfile.mkdtemp()], []
+    pasta_tmp = tempfile.mkdtemp(prefix="medilink-e2e-")   # perfis do Chrome; removida ao final
+    perfis, procs = [tempfile.mkdtemp(dir=pasta_tmp), tempfile.mkdtemp(dir=pasta_tmp)], []
     try:
         procs.append(abrir_chrome(sala, med["jwt"], True, 34, perfis[0]))      # médico entra e pede a transcrição
         time.sleep(9)
@@ -147,6 +152,7 @@ def cenario(auth, nome, consentir):
                 p.wait(timeout=20)
             except subprocess.TimeoutExpired:
                 p.terminate()
+        shutil.rmtree(pasta_tmp, ignore_errors=True)
     time.sleep(5)  # o JVB fecha o exportador e o sink fecha os arquivos
     pasta = PASTA_AUDIO / consulta
     arquivos = sorted(pasta.glob("*.opus")) if pasta.exists() else []
@@ -191,4 +197,5 @@ def main():
     sys.exit(1 if falhas else 0)
 
 
-main()
+if __name__ == "__main__":
+    main()

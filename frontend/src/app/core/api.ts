@@ -58,6 +58,11 @@ export class Api {
     return this.http.post<Sessao>(`/api/salas/${encodeURIComponent(room)}/token`, { tokenEntrada });
   }
 
+  /** Informa o endpoint do Jitsi do paciente; o papel vem do token de entrada, não do que o cliente diz. */
+  registrarParticipantePaciente(consultaId: string, tokenEntrada: string, endpointId: string): Observable<{ papel: string }> {
+    return this.http.post<{ papel: string }>(`/api/consultas/${consultaId}/participante`, { endpointId, tokenEntrada });
+  }
+
   // ---- médico ----
   eu(): Observable<{ nome: string; email: string }> {
     return this.http.get<{ nome: string; email: string }>('/api/me', { headers: this.auth.headers() });
@@ -81,6 +86,11 @@ export class Api {
 
   aceitar(consultaId: string): Observable<ConsultaDetalhe> {
     return this.http.post<ConsultaDetalhe>(`/api/consultas/${consultaId}/aceite`, null, { headers: this.auth.headers() });
+  }
+
+  /** Informa o endpoint do Jitsi do médico (para rotular as falas na transcrição). */
+  registrarParticipanteMedico(consultaId: string, endpointId: string): Observable<{ papel: string }> {
+    return this.http.post<{ papel: string }>(`/api/consultas/${consultaId}/participante`, { endpointId }, { headers: this.auth.headers() });
   }
 
   encerrar(consultaId: string): Observable<ConsultaDetalhe> {

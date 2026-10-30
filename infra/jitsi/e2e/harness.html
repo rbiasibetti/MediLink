@@ -10,8 +10,8 @@ const log = (...a) => console.log('HARNESS', ...a);
 const api = new JitsiMeetExternalAPI('localhost:8443', {
   roomName: p.get('room'), jwt: p.get('jwt'), parentNode: document.getElementById('j'), width: '100%', height: '100%',
   configOverwrite: { prejoinConfig: { enabled: false }, disableDeepLinking: true } });
-api.addEventListener('videoConferenceJoined', () => {
-  log('joined');
+api.addEventListener('videoConferenceJoined', (d) => {
+  log('joined', d && d.id);
   api.executeCommand('setVideoQuality', 360);
   if (p.get('pedir') === '1') setTimeout(() => { log('pedindo transcricao'); api.executeCommand('setSubtitles', true, false); }, 2000);
   const ate = parseInt(p.get('ate') || '0', 10);

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { retry } from 'rxjs';
 import { Api, ConsultaDetalhe, Sessao } from '../core/api';
 import { INTERVALO_ESPERA_MS } from '../core/config';
 import { JitsiRoom } from '../core/jitsi-room';
@@ -47,7 +48,7 @@ type Estado = 'carregando' | 'sala' | 'saiu' | 'erro';
               }
             </div>
             <div class="jitsi-wrap">
-              <app-jitsi-room [roomName]="s.roomName" [jwt]="s.jwt!" papel="medico" [transcrever]="detalhe()?.capturaAutorizada === true" (pronto)="salaPronta.set(true)" (saiu)="aoSair()" />
+              <app-jitsi-room [roomName]="s.roomName" [jwt]="s.jwt!" papel="medico" [transcrever]="detalhe()?.capturaAutorizada === true" (pronto)="salaPronta.set(true)" (participante)="registrarParticipante($event)" (saiu)="aoSair()" />
             </div>
           }
         }
@@ -102,6 +103,13 @@ export class ConsultaMedico {
       complete: () => { this.espera = setTimeout(() => this.acompanhar(), INTERVALO_ESPERA_MS); },
       error: () => { this.espera = setTimeout(() => this.acompanhar(), INTERVALO_ESPERA_MS); },
     });
+  }
+
+  /** Informa o endpoint do Jitsi ao backend (rotula o áudio do médico). Falha não atrapalha a consulta. */
+  protected registrarParticipante(endpointId: string): void {
+    const s = this.sessao();
+    if (!s) return;
+    this.api.registrarParticipanteMedico(s.consultaId, endpointId).pipe(retry({ count: 3, delay: 2000 })).subscribe({ error: () => undefined });
   }
 
   protected aceitar(): void {

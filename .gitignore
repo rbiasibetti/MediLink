@@ -17,3 +17,7 @@ infra/dev/mails/
 .idea/
 *.iml
 .DS_Store
+worker/.venv/
+worker/models/
+worker/**/__pycache__/
+.pytest_cache/

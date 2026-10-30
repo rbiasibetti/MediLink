@@ -4,6 +4,7 @@ import br.com.medilink.domain.Consulta;
 import br.com.medilink.domain.ConsultaStatus;
 import br.com.medilink.repository.ConsultaRepository;
 import br.com.medilink.repository.MedicoRepository;
+import br.com.medilink.transcricao.TranscricaoJobService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,12 +27,15 @@ public class ConsultaService {
 	private final MedicoRepository medicos;
 	private final AuditService auditoria;
 	private final Clock clock;
+	private final TranscricaoJobService jobs;
 
-	public ConsultaService(ConsultaRepository consultas, MedicoRepository medicos, AuditService auditoria, Clock clock) {
+	public ConsultaService(ConsultaRepository consultas, MedicoRepository medicos, AuditService auditoria, Clock clock,
+			TranscricaoJobService jobs) {
 		this.consultas = consultas;
 		this.medicos = medicos;
 		this.auditoria = auditoria;
 		this.clock = clock;
+		this.jobs = jobs;
 	}
 
 	@Transactional(readOnly = true)
@@ -75,6 +79,7 @@ public class ConsultaService {
 		}
 		c.encerrar(Instant.now(clock));
 		auditoria.registrar(medicoEmail, "CONSULTA_ENCERRADA", "consulta/" + c.getId());
+		jobs.criarAoEncerrar(c.getId()); // RF-06: a transcrição é enfileirada depois que os arquivos de áudio fecham
 		return detalhe(c);
 	}
 

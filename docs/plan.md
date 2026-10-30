@@ -150,6 +150,44 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 - **Encerramento:** o `JitsiRoom` embute a IFrame API e emite `saiu` uma vez em `videoConferenceLeft`/`readyToClose`. A página do médico, ao receber, lê o estado atual e **só encerra se a consulta estava `EM_ANDAMENTO`**; sair antes de admitir ninguém não encerra. Paciente sair não encerra (só o médico: `POST /api/consultas/{id}/encerrar`, idempotente).
 - **Limitações conhecidas:** (1) fechar a aba sem sair da conferência não dispara o evento, então a consulta fica em andamento; precisa de um encerramento por inatividade no servidor (a combinar com a T11). (2) O Jitsi precisa de HTTPS com certificado confiável no navegador: a IFrame API fixa `https://`, então Jitsi em HTTP não serve para dev. (3) O login do médico é o Basic provisório.
 
+## Transcrição pós-consulta (T12)
+
+**Fluxo.** O médico sai da sala → `POST /api/consultas/{id}/encerrar` cria o `transcricao_job` (um por consulta) → uma rotina do backend (a cada 5 s) espera os arquivos de áudio fecharem e publica o job no tópico `medilink.transcricao.jobs` (chave = consulta) → o worker transcreve cada fonte e publica o texto em `medilink.transcricao.resultados`. A T13 consome o resultado, grava a `Transcricao` e descarta o áudio.
+
+**Quem é quem.** O JVB só identifica a fonte pelo endpoint do Jitsi. Ao entrar na sala, cada cliente informa o próprio endpoint em `POST /api/consultas/{id}/participante`; o **papel vem da autenticação** (médico dono = `MEDICO`; paciente com o token de entrada = `PACIENTE`), nunca do que o cliente diz. Um endpoint não troca de papel (409) e a consulta encerrada não aceita registro. Quem não se registrou vira `DESCONHECIDO` no job. O mapa é informado pelo cliente (não é fonte autoritativa do servidor); o pior caso de adulteração é trocar rótulos dentro da própria consulta.
+
+**Estados do job** (`transcricao_job.status`): `PENDENTE` (criado ao encerrar) → `ENFILEIRADO`; ou `SEM_AUDIO` (a consulta terminou sem captura, por exemplo sem consentimento: nada a transcrever e nada publicado); ou `FALHA_NO_ENVIO` (20 tentativas com o broker fora do ar; o áudio é mantido). Um arquivo ainda em `GRAVANDO` é aguardado por até 10 min depois do fim da consulta, depois o job segue assim mesmo. Só o **tipo** da exceção é guardado (`ultimo_erro`), nunca a mensagem. A entrega é "pelo menos uma vez": se o envio der certo e o commit falhar, o job é reenviado e o worker deduplica pelo `jobId`.
+
+**Contrato do job** (`medilink.transcricao.jobs`, só referências; sem áudio, texto, CPF ou nome):
+
+```json
+{"versao":1,"jobId":"…","consultaId":"…","idioma":"pt","encerradaEm":"2026-10-29T12:30:00Z",
+ "fontes":[{"audioId":"…","arquivo":"{consultaId}/{tag}-{epochMs}.opus","endpointId":"7bc45eb8",
+            "papel":"MEDICO|PACIENTE|DESCONHECIDO","iniciadoEm":"2026-10-29T12:00:03.100Z"}]}
+```
+
+**Contrato do resultado** (`medilink.transcricao.resultados`, chave = consulta; **contém o texto da consulta, dado sensível de saúde**):
+
+```json
+{"versao":1,"jobId":"…","consultaId":"…","status":"CONCLUIDO|FALHA","idioma":"pt","duracaoMs":32249,
+ "segmentos":[{"papel":"MEDICO","inicioMs":3120,"fimMs":9800,"texto":"…"}],
+ "fontes":[{"audioId":"…","papel":"MEDICO","duracaoMs":31600,"falas":3}],"erro":"TipoDoErro"}
+```
+
+`inicioMs`/`fimMs` são relativos ao primeiro quadro de áudio de qualquer fonte. Cada arquivo começa no instante em que o sink o abriu (`iniciadoEm`), e as lacunas já vêm preenchidas com silêncio (T11), então o tempo absoluto de uma fala é `iniciadoEm` do arquivo mais o tempo dela dentro dele. Falas sobrepostas de médico e paciente são mantidas.
+
+**Worker** (`worker/`, Python 3.12): `faster-whisper`, modelo `turbo`, CPU `int8`, `language="pt"` fixo, VAD ligado, `condition_on_previous_text=False`, e descarte de trechos que o Whisper marca como sem fala (`no_speech_prob > 0.6` e `avg_logprob < -1.0`). O modelo é carregado uma vez e o `commit` da mensagem só acontece depois de o resultado ser entregue ao broker (`acks=all`, produtor idempotente). Mensagem fora do contrato é descartada sem travar a fila; falha inesperada vira resultado `FALHA` (só o tipo) e o áudio é mantido; falha em uma fonte não derruba as outras. O caminho do arquivo vem do job e é validado: sem caminho absoluto, `..` ou link simbólico que saia da pasta do sink. **O texto nunca vai para log.**
+
+**Medição** (8 núcleos, CPU, `int8`): 22 s para 45 s de áudio em português (≈ 2× o tempo real) por fonte, idioma detectado `pt` com confiança 1,00. Uma consulta de 30 min com duas fontes custa da ordem de 30 min de CPU, menos com o VAD cortando silêncio. Isso alimenta o dimensionamento da T15 (GPU ou mais workers) e a decisão em aberto sobre o SLA da transcrição.
+
+**Versões fixadas** (`worker/requirements.txt`): `faster-whisper==1.2.1`, `confluent-kafka==2.16.1` e **`av==16.1.0`**. O faster-whisper declara só `av>=11`, mas chama `av.open(metadata_errors=…)`, removido no PyAV 17+; sem o pin o `pip` instala o 19 e a transcrição quebra.
+
+**Fora de escopo da T12 / limites.**
+- Quem consome o resultado e grava a `Transcricao` é a **T13**; até lá o texto fica só no tópico (retenção padrão do broker), e o tópico precisa de controle de acesso e cifragem (T14).
+- O worker roda no host (venv); falta empacotar em container e escalar (T15).
+- O sink e o worker compartilham a pasta de áudio (`MEDILINK_SINK_DIR`); em produção isso exige volume compartilhado cifrado.
+- O texto não passa por revisão: vocabulário médico (nomes de remédios, termos técnicos) pode ser transcrito errado; avaliar o modelo e um glossário é decisão em aberto.
+
 ## Contratos de API
 
 | Método | Rota | Função | Tarefa |
@@ -163,7 +201,8 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 | GET | `/api/termo-consentimento` | Termo vigente (versão e texto), público | T09 |
 | POST | `/api/consultas/{id}/consentimento` | Registra, recusa ou retira o consentimento (paciente) | T09 |
 | POST | `/api/consultas/{id}/aceite` | Host admite o paciente | T08 |
-| POST | `/api/consultas/{id}/encerrar` | Médico encerra a consulta em andamento (idempotente); a fila da transcrição entra na T12 | T10 |
+| POST | `/api/consultas/{id}/encerrar` | Médico encerra a consulta em andamento (idempotente) e cria o job de transcrição | T10/T12 |
+| POST | `/api/consultas/{id}/participante` | O cliente informa o próprio endpoint do Jitsi (médico autenticado; paciente com o token de entrada) | T12 |
 | GET | `/api/me` | Nome e e-mail do médico autenticado (valida o login) | T10 |
 | GET | `/api/consultas/{id}/transcricao` | Retorna a transcrição quando pronta | T13 |
 

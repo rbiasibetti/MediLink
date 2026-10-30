@@ -28,6 +28,8 @@ class SecurityConfig {
 						// Consentimento é do paciente: ele se identifica pelo token de entrada, no corpo.
 						.requestMatchers(HttpMethod.GET, "/api/termo-consentimento").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/consultas/*/consentimento").permitAll()
+						// Participante: o médico entra autenticado, o paciente pelo token de entrada no corpo.
+						.requestMatchers(HttpMethod.POST, "/api/consultas/*/participante").permitAll()
 						.requestMatchers("/actuator/health/**").permitAll()
 						.anyRequest().authenticated())
 				.httpBasic(Customizer.withDefaults())

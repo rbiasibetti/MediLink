@@ -15,6 +15,7 @@ class JitsiStub {
   readonly papel = input.required<string>();
   readonly transcrever = input(false);
   readonly pronto = output<void>();
+  readonly participante = output<string>();
   readonly saiu = output<void>();
 }
 
@@ -131,6 +132,21 @@ describe('ConsultaMedico', () => {
     vi.advanceTimersByTime(3000);
     await assentar(f);
     expect(f.debugElement.query(By.directive(JitsiStub)).componentInstance.transcrever()).toBe(false);
+  });
+
+  it('informa ao backend o endpoint do Jitsi do médico quando ele entra na sala', async () => {
+    const api = {
+      tokenMedico: vi.fn(() => of(sessao)),
+      detalhe: vi.fn(() => of(detalhe('AGUARDANDO_PACIENTE'))),
+      registrarParticipanteMedico: vi.fn(() => of({ papel: 'MEDICO' })),
+    };
+    const f = montar(api);
+    await assentar(f);
+
+    f.debugElement.query(By.directive(JitsiStub)).componentInstance.participante.emit('7bc45eb8');
+    await assentar(f);
+
+    expect(api.registrarParticipanteMedico).toHaveBeenCalledWith('c1', '7bc45eb8');
   });
 
   it('o médico entra na sala com o papel de médico (só ele aciona a criptografia, quando o flag está ligado)', async () => {

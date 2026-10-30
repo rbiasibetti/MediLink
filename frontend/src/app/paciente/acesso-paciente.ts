@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { retry } from 'rxjs';
 import { Acesso, Api, Sessao, Termo } from '../core/api';
 import { INTERVALO_ESPERA_MS } from '../core/config';
 import { JitsiRoom } from '../core/jitsi-room';
@@ -93,7 +94,7 @@ type Etapa = 'carregando' | 'indisponivel' | 'cpf' | 'espera' | 'sala' | 'saiu' 
               }
             </div>
             <div class="jitsi-wrap">
-              <app-jitsi-room [roomName]="s.roomName" [jwt]="s.jwt!" papel="paciente" (saiu)="aoSair()" />
+              <app-jitsi-room [roomName]="s.roomName" [jwt]="s.jwt!" papel="paciente" (participante)="registrarParticipante($event)" (saiu)="aoSair()" />
             </div>
           }
         }
@@ -228,6 +229,13 @@ export class AcessoPaciente {
   /** Só entra na sala admitido pelo médico E depois de ter respondido ao termo. */
   private avancarSeLiberado(): void {
     if (this.liberado()) this.etapa.set('sala');
+  }
+
+  /** Informa o endpoint do Jitsi ao backend (rotula o áudio do paciente). Falha não atrapalha a consulta. */
+  protected registrarParticipante(endpointId: string): void {
+    const c = this.consultaId();
+    if (!c || !this.tokenEntrada) return;
+    this.api.registrarParticipantePaciente(c, this.tokenEntrada, endpointId).pipe(retry({ count: 3, delay: 2000 })).subscribe({ error: () => undefined });
   }
 
   protected aoSair(): void {

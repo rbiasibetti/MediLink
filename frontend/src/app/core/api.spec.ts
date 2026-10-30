@@ -51,6 +51,19 @@ describe('Api', () => {
     expect(http.expectOne('/api/consultas/c1/encerrar').request.headers.has('Authorization')).toBe(true);
   });
 
+  it('registrar o endpoint: médico autenticado; paciente com o token no corpo e sem Authorization', () => {
+    TestBed.inject(MedicoAuth).definir('m@c.t', 's');
+    api.registrarParticipanteMedico('c1', '7bc45eb8').subscribe();
+    const m = http.expectOne('/api/consultas/c1/participante');
+    expect(m.request.headers.has('Authorization')).toBe(true);
+    expect(m.request.body).toEqual({ endpointId: '7bc45eb8' });
+
+    api.registrarParticipantePaciente('c1', 'tok', 'd88aeac9').subscribe();
+    const p = http.expectOne('/api/consultas/c1/participante');
+    expect(p.request.headers.has('Authorization')).toBe(false);
+    expect(p.request.body).toEqual({ endpointId: 'd88aeac9', tokenEntrada: 'tok' });
+  });
+
   it('o consentimento é do paciente: usa o token de entrada, não o login do médico', () => {
     TestBed.inject(MedicoAuth).definir('m@c.t', 's');
     api.consentir('c1', 'tok', true, 'v1').subscribe();

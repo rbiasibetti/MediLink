@@ -1,0 +1,5 @@
+# Worker de transcrição (T12). Versões fixadas.
+faster-whisper==1.2.1
+confluent-kafka==2.16.1
+# O faster-whisper 1.2.1 declara apenas av>=11, mas chama av.open(metadata_errors=...), removido no PyAV 17+.
+av==16.1.0
