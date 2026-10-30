@@ -27,10 +27,14 @@ O modelo é guardado em `worker/models/` (fora do git). O áudio é lido da past
 | `MEDILINK_WHISPER_DEVICE`, `MEDILINK_WHISPER_COMPUTE` | `cpu`, `int8` | Dispositivo e precisão |
 | `MEDILINK_WHISPER_IDIOMA` | `pt` | Idioma fixo (evita detecção errada em trechos curtos) |
 
+## Produção
+
+Não há container: o caminho validado é `venv` + `systemd`, na mesma máquina e **com o mesmo usuário** do backend (os arquivos de áudio são `600` e as pastas `700`). Resumo: instalar com `requirements.txt` (não o `-dev`), baixar o modelo uma vez para `MEDILINK_WHISPER_DIR`, definir `HF_HUB_OFFLINE=1`, `MEDILINK_DATA_KEY` igual à do backend, `MEDILINK_KAFKA_SECURITY_PROTOCOL=SSL` e `MEDILINK_KAFKA_CA`, e rodar `python -m medilink_worker` como serviço. O passo a passo com o arquivo de ambiente e a unidade `systemd` está em [Implantação em produção › Worker](../README.md#9-worker-de-transcrição-whisper). Vários workers: mesmo `MEDILINK_WORKER_GRUPO` e tópico de jobs com mais partições. GPU (`cuda`/`float16`) não foi exercitada.
+
 ## Testes
 
 ```bash
-.venv/bin/python -m pytest -q      # 30 testes, sem modelo e sem broker (transcritor falso)
+.venv/bin/python -m pytest -q      # 39 testes, sem modelo e sem broker (transcritor falso)
 ```
 
 Verificação ponta a ponta com fala em português pelo Jitsi real: [`infra/jitsi/e2e/verify_t12.py`](../infra/jitsi/e2e/verify_t12.py) (os pré-requisitos estão no cabeçalho do script).
