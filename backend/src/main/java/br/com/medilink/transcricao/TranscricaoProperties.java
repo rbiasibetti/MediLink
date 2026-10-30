@@ -12,6 +12,8 @@ public record TranscricaoProperties(
 		@DefaultValue("medilink.transcricao.resultados") String topicoResultados,
 		/** Liga a rotina que envia os jobs pendentes (desligada nos testes, que chamam a varredura direto). */
 		@DefaultValue("true") boolean agendadorAtivo,
+		/** Liga o consumidor do tópico de resultados (desligado nos testes que não usam o broker). */
+		@DefaultValue("true") boolean consumidorAtivo,
 		@DefaultValue("5000") long intervaloMs,
 		/** Quanto esperar um arquivo de áudio ainda "gravando" depois do fim da consulta antes de enviá-lo assim mesmo. */
 		@DefaultValue("10m") Duration esperaMaximaDoAudio,

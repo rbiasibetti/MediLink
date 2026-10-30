@@ -61,6 +61,13 @@ public class TranscricaoJob {
 		this.atualizadoEm = agora.truncatedTo(ChronoUnit.MILLIS);
 	}
 
+	/** O worker respondeu que não conseguiu transcrever (só o tipo do erro, nunca mensagem). */
+	public void falhouNoWorker(String tipoDoErro, Instant agora) {
+		this.status = JobStatus.FALHA_NO_WORKER;
+		this.ultimoErro = tipoDoErro.length() > 200 ? tipoDoErro.substring(0, 200) : tipoDoErro;
+		this.atualizadoEm = agora.truncatedTo(ChronoUnit.MILLIS);
+	}
+
 	public UUID getId() {
 		return id;
 	}

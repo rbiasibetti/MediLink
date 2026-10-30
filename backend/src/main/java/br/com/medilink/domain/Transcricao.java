@@ -13,6 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -37,6 +38,14 @@ public class Transcricao {
 	@Column(name = "criada_em", nullable = false)
 	private Instant criadaEm;
 
+	/** As mesmas falas de {@code texto}, em JSON, com papel e tempo de cada uma. */
+	@JdbcTypeCode(SqlTypes.NVARCHAR)
+	@Column(nullable = false, length = Length.LONG32)
+	private String segmentos = "[]";
+
+	@Column(name = "duracao_ms", nullable = false)
+	private long duracaoMs;
+
 	protected Transcricao() {
 	}
 
@@ -45,7 +54,21 @@ public class Transcricao {
 		this.consulta = consulta;
 		this.texto = texto;
 		this.idioma = idioma;
-		this.criadaEm = criadaEm;
+		this.criadaEm = criadaEm.truncatedTo(ChronoUnit.MILLIS);
+	}
+
+	public Transcricao(Consulta consulta, String texto, String segmentos, long duracaoMs, String idioma, Instant criadaEm) {
+		this(consulta, texto, idioma, criadaEm);
+		this.segmentos = segmentos;
+		this.duracaoMs = duracaoMs;
+	}
+
+	public String getSegmentos() {
+		return segmentos;
+	}
+
+	public long getDuracaoMs() {
+		return duracaoMs;
 	}
 
 	public UUID getId() {

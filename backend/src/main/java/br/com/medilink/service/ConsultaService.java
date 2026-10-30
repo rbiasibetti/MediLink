@@ -84,7 +84,7 @@ public class ConsultaService {
 	}
 
 	/** Só o médico dono vê a consulta; para os demais ela "não existe". */
-	private Consulta daMedico(String medicoEmail, UUID consultaId) {
+	public Consulta daMedico(String medicoEmail, UUID consultaId) {
 		var medico = medicos.findByEmail(medicoEmail).orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
 		return consultas.findById(consultaId)
 				.filter(c -> c.getAgendamento().getMedico().getId().equals(medico.getId()))

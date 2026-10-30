@@ -16,23 +16,23 @@ Uma por vez; só avança quando o critério de aceite (CA) passa. Estados: `todo
 | T10 | Consulta | Embed Angular + evento de encerramento | Ao sair, consulta marcada como encerrada | T08 | **done no código e nos testes** (backend 5 testes de encerramento; Angular 19 testes; jornada paciente+médico exercitada no navegador contra o backend real). **Não verificado:** o embed real do Jitsi e o evento `videoConferenceLeft` num navegador, porque o certificado autoassinado de `localhost:8443` não é aceito aqui; precisa de um teste seu (abrir `https://localhost:8443` e aceitar o certificado) |
 | T11 | Transcrição | Audio sink (bridge) com Opus transitório por sala | Áudio disponível como arquivo transitório | T10 | **done** (decisão em plan.md: E2EE desligada, P2P desligado, captura no servidor). Backend 102 testes no SQL Server local (19 do sink); frontend 33; **ponta a ponta com Jitsi real** (`infra/jitsi/e2e/verify_t11.py`): com consentimento, 1 Ogg Opus válido por participante, nada antes do aceite, linha do tempo coerente; sem consentimento, zero arquivos. Limites: o gatilho é o cliente do médico (endurecer no servidor), falta mapear fonte → médico/paciente (T12), descarte é a T13, produção exige `wss` e disco cifrado (T14) |
 | T12 | Transcrição | Fila + worker faster-whisper | Transcreve pt-BR, identifica locutores, VAD | T11 | **done** — backend 118 testes (SQL Server local + Redpanda real), worker 30, frontend 38; **ponta a ponta com Jitsi real e fala em português** (`infra/jitsi/e2e/verify_t12.py`): médico e paciente falam trechos diferentes, o resultado chega ao tópico em `pt`, cada trecho com o papel certo e na ordem certa; sem consentimento nada é transcrito. Detalhes e limites: `docs/plan.md` ("Transcrição pós-consulta") |
-| T13 | Transcrição | Gravar `Transcricao` e descartar áudio (idempotente) | Registro existe e áudio some; falha mantém o áudio | T12 | todo |
+| T13 | Transcrição | Gravar `Transcricao` e descartar áudio (idempotente) | Registro existe e áudio some; falha mantém o áudio | T12 | **done** — backend 136 testes (SQL Server local + Redpanda real; 18 novos: serviço 9, API 7, consumidor 2); **ponta a ponta com Jitsi real e o worker** (`infra/jitsi/e2e/verify_t13.py`, 14/14): a API devolve a transcrição com médico e paciente nos rótulos certos e o áudio some do disco; sem consentimento, 404 e nenhuma pasta. Detalhes e limites: `docs/plan.md` ("Gravação da transcrição e descarte do áudio") |
 | T14 | Compliance | Criptografia em repouso, auditoria, retenção | Acessos auditados; áudio/transcrição cifrados | T13 | todo |
 | T15 | Escala | Múltiplos JVBs, autoscaling, carga 100→500→1.000 | Métricas atingem o alvo | T13 | todo |
 
-Concluídas: T01–T12. Próxima: T13 (gravar a `Transcricao` e descartar o áudio). A T12 foi verificada com Chrome de teste e áudio de arquivo; falar de verdade num navegador com microfone real continua sem verificação.
+Concluídas: T01–T13. Próxima: T14 (compliance: cifragem em repouso, auditoria de leitura, retenção). A T12 e a T13 foram verificadas com Chrome de teste e áudio de arquivo; falar de verdade num navegador com microfone real continua sem verificação.
 
-Banco: sem H2; a suíte completa (61 testes) roda só contra o SQL Server local (`backend/run-mssql.sh test`); pendência: rodar em uma instância 2019 exata. Jitsi não exposto (bloqueio de navegação direta + CSP): verificado por curl com os cabeçalhos do navegador e pelos scripts de verificação; **o iframe real com essas regras ainda precisa ser conferido num navegador**. Restrições e preferências da sala (ruído, nível 2, recursos desabilitados; E2EE desligada por padrão e P2P desligado): config servida e JWT verificados, 26 testes de frontend e regressão no Prosody; **o comportamento real no navegador com mídia (nível 2, ruído e o P2P desligado) não foi verificado**. Outras pendências: o Prosody registra o JWT completo nos logs de erro de `token_verification` — tratar logs do Prosody como sensíveis (token é por sala e expira em 2 h).
+Banco: sem H2; a suíte completa (136 testes) roda só contra o SQL Server local (`backend/run-mssql.sh test`); pendência: rodar em uma instância 2019 exata. Jitsi não exposto (bloqueio de navegação direta + CSP): verificado por curl com os cabeçalhos do navegador e pelos scripts de verificação; **o iframe real com essas regras ainda precisa ser conferido num navegador**. Restrições e preferências da sala (ruído, nível 2, recursos desabilitados; E2EE desligada por padrão e P2P desligado): config servida e JWT verificados, 26 testes de frontend e regressão no Prosody; **o comportamento real no navegador com mídia (nível 2, ruído e o P2P desligado) não foi verificado**. Outras pendências: o Prosody registra o JWT completo nos logs de erro de `token_verification` — tratar logs do Prosody como sensíveis (token é por sala e expira em 2 h).
 
 ## Backlog mapeado para a próxima sequência
 
 Nada abaixo foi iniciado. Está registrado aqui e no `README.md` para retomar depois.
 
-### Etapas do plano ainda não feitas (T13 a T15)
+### Etapas do plano ainda não feitas (T14 e T15)
 
 | ID | O que falta | Pontos de atenção já levantados |
 | --- | --- | --- |
-| T13 | Gravar `Transcricao` e **descartar o áudio** de forma idempotente (RF-07); `GET /api/consultas/{id}/transcricao` | Descarte só após a gravação confirmada no banco; falha mantém o áudio; marcar `audio_transitorio` como `DESCARTADO`; enfileirar a transcrição no encerramento (RF-06) |
+| T13 | **Feito** (ver acima) | Pendências que sobraram dela estão em "Endurecimentos", abaixo |
 | T14 | Compliance: criptografia em repouso (áudio temporário, transcrição, backups), TLS interno (JVB → sink, fila, worker, SQL Server com `encrypt=true` e certificado verificado), auditoria de **leitura**, política de retenção, limpeza de `tentativa_cpf` | Ver a tabela de condições em `docs/plan.md` ("Decisão: E2EE desligada"); Relatório de Impacto e DPO são trabalho do jurídico |
 | T15 | Escala: vários JVBs, autoscaling dos workers, teste de carga 100 → 500 → 1.000 | P2P desligado leva toda a mídia ao JVB (≈ 2.000 streams para 1.000 salas); o `url-template` do sink precisa de balanceador; limite de tamanho por arquivo |
 
@@ -42,7 +42,11 @@ Nada abaixo foi iniciado. Está registrado aqui e no `README.md` para retomar de
 - **Encerramento por inatividade:** fechar a aba sem sair da conferência deixa a consulta em andamento.
 - **Login definitivo do médico:** hoje é HTTP Basic provisório (decisão em aberto: IdP).
 - **Token de entrada de 10 min:** se o aceite do médico demorar mais, o paciente precisa repetir o CPF; renovar durante a espera.
-- **Resultado da transcrição:** fica só no tópico `medilink.transcricao.resultados` até a T13; o worker roda no host (falta container) e a transcrição custa ≈ 2× o tempo real em CPU (dimensionar na T15).
+- **Resultado da transcrição:** a T13 grava no banco, mas o texto **permanece no tópico** `medilink.transcricao.resultados` (retenção do broker: encurtar e controlar acesso na T14); o worker roda no host (falta container) e a transcrição custa ≈ 2× o tempo real em CPU (dimensionar na T15).
+- **Reprocessamento de jobs falhos:** `FALHA_NO_ENVIO` e `FALHA_NO_WORKER` mantêm o áudio, mas nada os reenvia sozinho nem expira o áudio deles (comando de reenvio + retenção, T14).
+- **Descarte sem sobrescrita:** o áudio é apagado com `unlink`; a garantia de irrecuperabilidade depende da cifragem em repouso (T14).
+- **Worker e internet:** ao carregar o modelo o worker consulta o huggingface.co; em produção, `HF_HUB_OFFLINE=1` com o modelo já baixado.
+- **Acesso do titular à transcrição** (LGPD art. 18): hoje só o médico lê pela API; o fluxo para o paciente pedir os próprios dados é do jurídico/DPO.
 - **Mapa de participantes é informado pelo cliente** (o papel vem da autenticação, mas o endpoint vem do navegador); um mapa autoritativo exigiria o Prosody informar `nick → usuário`.
 - **Vocabulário médico:** avaliar a qualidade do Whisper com terminologia clínica e decidir sobre glossário ou outro modelo.
 - **Tela Angular de agendamentos:** não há listagem/edição/cancelamento de agendamentos (só criar).

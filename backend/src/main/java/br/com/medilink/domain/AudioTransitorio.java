@@ -64,6 +64,14 @@ public class AudioTransitorio {
 		this.amostras = amostras;
 	}
 
+	/** O arquivo já foi apagado do disco; a linha fica como registro de que o áudio existiu (o momento vai na auditoria). */
+	public void descartar(Instant agora) {
+		this.status = AudioStatus.DESCARTADO;
+		if (this.finalizadoEm == null) {
+			this.finalizadoEm = agora.truncatedTo(ChronoUnit.MILLIS);
+		}
+	}
+
 	public UUID getId() {
 		return id;
 	}

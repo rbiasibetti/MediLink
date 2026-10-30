@@ -106,7 +106,7 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 - **Quem é quem:** os arquivos vêm por `tag` (`{endpointId}-a0`); o `endpointId` fica no banco, mas ainda não se sabe qual é o médico e qual é o paciente. A T12 precisa mapear (o cliente conhece o próprio `endpointId` no evento `videoConferenceJoined`).
 - **Tempo:** os timestamps vêm do JVB, não do relógio de parede; o início de cada arquivo é o instante em que abriu (no nome) e vale como âncora para alinhar as fontes na T12.
 - **Produção:** `ws://` só em dev. Em produção o sink precisa de `wss://` (TLS até o backend), `SINK_TOKEN` forte em cofre, a pasta de áudio em disco cifrado (T14) e limite de tamanho por arquivo. Um sink por instância do backend; com várias, o `url-template` deve ir para um balanceador (T15).
-- Um dia de captura é pequeno (~4 kB/s por fonte), mas **nada apaga o áudio ainda**: o descarte é a T13.
+- Um dia de captura é pequeno (~4 kB/s por fonte). O áudio é apagado depois de a transcrição ser gravada (T13, abaixo).
 
 **Achado de passagem (corrigido):** a opção `prejoinPageEnabled` não existe mais no Jitsi desta versão e é ignorada em silêncio; o participante ficava parado na tela de pré-entrada. A opção atual é `prejoinConfig.enabled`; corrigida no `JitsiRoom` e no `custom-config.js`.
 
@@ -119,7 +119,7 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 | Certificado válido e HTTPS forçado em produção (hoje: autoassinado em dev) | Pendente (produção) |
 | Tráfego interno cifrado: JVB → sink, fila, worker, SQL Server (`encrypt=true` e `trustServerCertificate=false`; hoje o dev usa `true`) | Pendente (T11 a T14) |
 | Criptografia em repouso: áudio temporário, transcrição, backups (TDE ou criptografia de coluna) | Pendente (T14) |
-| Acesso por papel e auditoria de leitura de áudio, CPF e transcrição; descarte do áudio após gravar a transcrição | Parcial: auditoria básica pronta; descarte na T13; leitura na T14 |
+| Acesso por papel e auditoria de leitura de áudio, CPF e transcrição; descarte do áudio após gravar a transcrição | Parcial: auditoria básica pronta; descarte feito na T13; leitura da transcrição já é auditada (`TRANSCRICAO_LIDA`); falta o restante da T14 |
 | Base legal, Relatório de Impacto, registro das operações e plano de incidente documentados | Pendente (DPO/jurídico) |
 | Termo de consentimento fiel ao tratamento real (já diz: só áudio, transcrição, descarte do áudio, sem terceiros) | Minuta pronta; validar com jurídico |
 
@@ -183,10 +183,36 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 **Versões fixadas** (`worker/requirements.txt`): `faster-whisper==1.2.1`, `confluent-kafka==2.16.1` e **`av==16.1.0`**. O faster-whisper declara só `av>=11`, mas chama `av.open(metadata_errors=…)`, removido no PyAV 17+; sem o pin o `pip` instala o 19 e a transcrição quebra.
 
 **Fora de escopo da T12 / limites.**
-- Quem consome o resultado e grava a `Transcricao` é a **T13**; até lá o texto fica só no tópico (retenção padrão do broker), e o tópico precisa de controle de acesso e cifragem (T14).
+- Quem consome o resultado e grava a `Transcricao` é a **T13** (seção abaixo). O texto continua no tópico depois de gravado (retenção padrão do broker): o tópico precisa de controle de acesso, cifragem e retenção curta (T14).
 - O worker roda no host (venv); falta empacotar em container e escalar (T15).
 - O sink e o worker compartilham a pasta de áudio (`MEDILINK_SINK_DIR`); em produção isso exige volume compartilhado cifrado.
 - O texto não passa por revisão: vocabulário médico (nomes de remédios, termos técnicos) pode ser transcrito errado; avaliar o modelo e um glossário é decisão em aberto.
+
+## Gravação da transcrição e descarte do áudio (T13)
+
+**Fluxo.** O backend lê o tópico `medilink.transcricao.resultados` (grupo `medilink-backend`, `earliest`, offset confirmado só depois de o listener retornar) → valida a mensagem → grava a `Transcricao` e marca o job `TRANSCRITO` numa transação → **depois do commit** apaga cada arquivo de áudio, marca a linha `DESCARTADO` e conclui o job (`CONCLUIDO`). Uma varredura (a mesma de 5 s da T12) repete o descarte dos jobs que ficaram `TRANSCRITO`.
+
+**Estados novos do job:** `TRANSCRITO` (texto gravado, falta apagar o áudio), `CONCLUIDO` (gravado e apagado: o caminho feliz) e `FALHA_NO_WORKER` (o worker respondeu `FALHA`; o áudio é mantido, e um novo resultado `CONCLUIDO` do mesmo job ainda é aceito).
+
+**Garantias (e como são testadas).**
+- *Falha antes do commit mantém o áudio:* o arquivo só é tocado depois da transação que grava o texto. Resultado `FALHA`, mensagem inválida ou job desconhecido não apagam nada.
+- *Falha depois do commit só repete o descarte:* se o disco não deixa apagar, o texto já está salvo, o job fica `TRANSCRITO` e a varredura insiste; só vira `CONCLUIDO` com **todos** os arquivos apagados (arquivo já ausente conta como apagado).
+- *Idempotente:* a entrega repetida da fila (ou duas instâncias do backend) não duplica a `Transcricao` (única por consulta) nem quebra o descarte.
+- *Caminho conferido:* o arquivo vem do banco, mas precisa ficar dentro de `{dir do sink}/{consultaId}/`; qualquer outro caminho é recusado e o job não conclui.
+- *Arquivo ainda `GRAVANDO`:* é esperado até `esperaMaximaDoAudio` (10 min) depois do fim da consulta; passado o prazo, uma linha presa é tratada como apagável.
+- *Fila não trava nem perde:* mensagem fora do contrato (JSON inválido, versão ≠ 1, UUID ruim, segmento incoerente) é registrada com um código fixo e descartada; falha inesperada (banco ou disco) repete a **mesma** mensagem a cada 5 s, sem limite, porque pular o offset perderia a transcrição.
+- *Sem conteúdo em log nem auditoria:* só ids, tipos de exceção e `topic-partição@offset`. A auditoria registra `TRANSCRICAO_GRAVADA`, `TRANSCRICAO_FALHOU`, `AUDIO_DESCARTADO` e `TRANSCRICAO_LIDA`.
+
+**Modelo.** `transcricao.texto` é o texto corrido (`Médico: …` / `Paciente: …`, em ordem de tempo); `segmentos` guarda as mesmas falas em JSON com papel, `inicioMs` e `fimMs`; `duracao_ms` e `idioma` completam (migração V6). O texto está duplicado entre `texto` e `segmentos` de propósito: a leitura simples não precisa de parse e o JSON preserva os tempos. Ambos são dado sensível de saúde.
+
+**Leitura.** `GET /api/consultas/{id}/transcricao` só para o médico dono (consulta de outro médico é `404`, como em todo o resto). Cada leitura bem-sucedida é auditada com o ator e a consulta. O paciente não lê pela API; o acesso do titular aos próprios dados (LGPD art. 18) é um processo à parte, a definir com o jurídico.
+
+**Limites / o que a T13 não faz.**
+- O **áudio é apagado do sistema de arquivos comum** (`unlink`); não há sobrescrita. A proteção real do que já foi gravado vem da cifragem em repouso (T14): apagar a chave torna o resto ilegível, apagar o arquivo em disco comum não garante isso.
+- O **texto permanece no tópico de resultados** pela retenção do broker. Definir retenção curta ou compactação e controle de acesso é T14.
+- Um job `FALHA_NO_WORKER` ou `FALHA_NO_ENVIO` **não é reprocessado sozinho**; falta uma rotina ou comando de reenvio (o áudio fica no disco até alguém tratar). Também não há expurgo do áudio de jobs falhos: política de retenção (T14).
+- Uma única instância de consumidor por grupo; para escalar o backend, o tópico precisa de várias partições (T15).
+- O worker, ao carregar o modelo, **consulta o huggingface.co** (verifica a revisão). Não envia dado de paciente, mas é saída para a internet: em produção, definir `HF_HUB_OFFLINE=1` com o modelo já baixado.
 
 ## Contratos de API
 
@@ -204,11 +230,13 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 | POST | `/api/consultas/{id}/encerrar` | Médico encerra a consulta em andamento (idempotente) e cria o job de transcrição | T10/T12 |
 | POST | `/api/consultas/{id}/participante` | O cliente informa o próprio endpoint do Jitsi (médico autenticado; paciente com o token de entrada) | T12 |
 | GET | `/api/me` | Nome e e-mail do médico autenticado (valida o login) | T10 |
-| GET | `/api/consultas/{id}/transcricao` | Retorna a transcrição quando pronta | T13 |
+| GET | `/api/consultas/{id}/transcricao` | Transcrição da consulta (só o médico dono): `200` com falantes e tempos; `202` enquanto processa; `409` se a consulta está aberta ou a transcrição falhou; `404` se a consulta não é dele ou não teve áudio | T13 |
 
 **JWT do Jitsi:** médico com `moderator=true`; paciente sem moderação, emitido só após o CPF (quando ativo). Claims amarram `agendamentoId`, `medicoId` e o paciente. Sala de espera = lobby do Jitsi.
 
-## Idempotência do descarte (T13)
+## Idempotência do descarte (T13) — regra de projeto
+
+Implementada e verificada: veja "Gravação da transcrição e descarte do áudio (T13)", acima.
 
 1. Gravar `Transcricao` (unique por `consultaId`) numa transação.
 2. Só após o commit, apagar o áudio; a remoção é idempotente (arquivo ausente = sucesso).
