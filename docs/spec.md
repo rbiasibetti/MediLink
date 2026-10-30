@@ -20,7 +20,7 @@ Fora de escopo: gravação de vídeo e transcrição em tempo real.
 | RF-05 | **Aceite pelo host.** O paciente aguarda em sala de espera; o médico o admite. | O paciente só entra na sala após o aceite explícito do médico. |
 | RF-06 | **Captura e transcrição pós-consulta.** O áudio é capturado durante a consulta e transcrito de forma assíncrona após o encerramento. | Encerrada a consulta, um job de transcrição é enfileirado com referência ao áudio. |
 | RF-07 | **Transcrição no banco e descarte do áudio.** Concluída a transcrição, o texto é gravado em registro vinculado à consulta e o áudio é descartado. | Existe registro de transcrição no banco e o arquivo de áudio não existe mais em nenhum armazenamento. |
-| RF-08 | **Consentimento.** O consentimento de gravação/transcrição é coletado e registrado antes do início. | Sem consentimento registrado, a captura não inicia. |
+| RF-08 | **Consentimento obrigatório.** Toda teleconsulta é registrada: o paciente precisa aceitar o termo (gravação e transcrição) antes de chegar à sala de espera. | Sem o aceite o paciente não chega à espera nem à sala (`409`); o médico não aceita quem não consentiu; retirar o consentimento durante a consulta interrompe a captura e encerra a participação do paciente. A captura continua conferindo o consentimento por conta própria. |
 
 ## Domínio
 

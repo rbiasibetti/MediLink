@@ -68,9 +68,13 @@ def cenario(auth, nome, consentir, wav_medico, wav_paciente, consumidor):
     sala, consulta = ag["roomName"], ag["consultaId"]
     _, med = base.api(f"/api/agendamentos/{ag['id']}/token-jitsi", None, auth)
     _, ent = base.api(f"/api/salas/{sala}/validar-cpf", {"cpf": base.CPF})
+    if not consentir:   # recusa: o paciente não chega à espera e a consulta não começa
+        base.api(f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": ent["tokenEntrada"], "aceito": False, "versaoTermo": base.versao_termo()})
+        st, _ = base.api(f"/api/salas/{sala}/token", {"tokenEntrada": ent["tokenEntrada"]})
+        base.conferir("quem recusa o termo não chega nem à espera (409)", st == 409)
+        return consulta
+    base.api(f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": ent["tokenEntrada"], "aceito": True, "versaoTermo": base.versao_termo()})
     base.api(f"/api/salas/{sala}/token", {"tokenEntrada": ent["tokenEntrada"]})
-    if consentir:
-        base.api(f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": ent["tokenEntrada"], "aceito": True, "versaoTermo": "v1"})
 
     pasta_tmp = tempfile.mkdtemp(prefix="medilink-e2e-")   # perfis e logs do Chrome; removida ao final
     perfis = [tempfile.mkdtemp(dir=pasta_tmp), tempfile.mkdtemp(dir=pasta_tmp)]
@@ -142,9 +146,9 @@ def main():
                           and ini["MEDICO"] < ini["PACIENTE"], f"médico {ini['MEDICO']} ms, paciente {ini['PACIENTE']} ms")
             base.conferir("duração coerente com a consulta (> 20 s)", r["duracaoMs"] > 20_000, f"{r['duracaoMs']} ms")
 
-        consulta_b = cenario(auth, "B: sem consentimento", False, wav_m, wav_p, cons)
-        print("aguardando 25 s: não deve chegar resultado…", flush=True)
-        base.conferir("sem consentimento nada é transcrito (nenhum resultado)", esperar_resultado(cons, consulta_b, 25) is None)
+        consulta_b = cenario(auth, "B: recusa do termo", False, wav_m, wav_p, cons)
+        print("aguardando 10 s: não deve chegar resultado…", flush=True)
+        base.conferir("quem recusa o termo: nada é transcrito (nenhum resultado)", esperar_resultado(cons, consulta_b, 10) is None)
     finally:
         servidor.shutdown()
     sys.exit(1 if base.falhas else 0)

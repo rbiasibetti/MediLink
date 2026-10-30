@@ -29,7 +29,7 @@ class SalaController {
 		}
 	}
 
-	record EntradaResponse(String tokenEntrada, Instant expiraEm) {
+	record EntradaResponse(String tokenEntrada, Instant expiraEm, java.util.UUID consultaId) {
 	}
 
 	record TokenRequest(String tokenEntrada) {
@@ -57,7 +57,7 @@ class SalaController {
 	EntradaResponse validarCpf(@PathVariable String roomName,
 			@RequestBody(required = false) ValidarCpfRequest req) {
 		Emitido e = acesso.validar(roomName, req == null ? null : req.cpf());
-		return new EntradaResponse(e.token(), e.expiraEm());
+		return new EntradaResponse(e.token(), e.expiraEm(), acesso.consultaDaSala(roomName));
 	}
 
 	/**

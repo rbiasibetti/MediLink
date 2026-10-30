@@ -55,6 +55,7 @@ class AudioSinkIntegracaoTest {
 
 	@LocalServerPort int porta;
 	@Autowired MockMvc mvc;
+	@Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 	@Autowired MedicoRepository medicos;
 	@Autowired AudioTransitorioRepository audios;
 	@Autowired AuditLogRepository auditoria;
@@ -99,7 +100,7 @@ class AudioSinkIntegracaoTest {
 
 	private void consentir(Consulta c, boolean aceito) throws Exception {
 		mvc.perform(post("/api/consultas/" + c.id() + "/consentimento").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"tokenEntrada\":\"%s\",\"aceito\":%s,\"versaoTermo\":\"v1\"}".formatted(c.entrada(), aceito)))
+				.content("{\"tokenEntrada\":\"%s\",\"aceito\":%s,\"versaoTermo\":\"v2\"}".formatted(c.entrada(), aceito)))
 				.andExpect(status().isOk());
 	}
 
@@ -290,7 +291,9 @@ class AudioSinkIntegracaoTest {
 	@Test
 	void semConsentimentoNadaEGravado() throws Exception {
 		Consulta c = criarConsulta();
-		iniciar(c); // em andamento, mas o paciente NÃO consentiu
+		// Pela API isto não acontece mais (sem consentimento o paciente nem chega à espera). O sink continua conferindo
+		// por conta própria, como defesa em profundidade: aqui forçamos o estado "em andamento sem consentimento".
+		jdbc.update("UPDATE consulta SET status = 'EM_ANDAMENTO', inicio_em = SYSDATETIMEOFFSET() WHERE id = ?", UUID.fromString(c.id()));
 		Jvb jvb = new Jvb();
 		WebSocket ws = conectarOk(jvb, c.sala());
 

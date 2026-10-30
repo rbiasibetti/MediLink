@@ -61,7 +61,8 @@ public class SessaoJitsiService {
 	 * a chegada e devolve AGUARDANDO_MEDICO, e o paciente repete a chamada até ser admitido. É o backend, e não
 	 * o lobby do Jitsi, quem guarda a porta: a sala do Jitsi nasce aberta e, sem credencial, ninguém entra nela.
 	 * Qualquer falha dá a mesma resposta (token inválido, expirado, de outra sala, sala inexistente, agendamento
-	 * cancelado ou consulta já encerrada).
+	 * cancelado ou consulta já encerrada). A única resposta diferente é o 409 de falta de consentimento, que o
+	 * paciente (já autenticado pelo token) precisa receber para saber o que fazer.
 	 */
 	@Transactional
 	public Sessao paraPaciente(String roomName, String tokenEntrada) {
@@ -73,6 +74,14 @@ public class SessaoJitsiService {
 				.orElseThrow(SessaoJitsiService::negado);
 		Consulta consulta = consultas.findByAgendamentoId(a.getId()).orElseThrow(SessaoJitsiService::negado);
 
+		// Toda consulta é registrada: sem o consentimento ao termo o paciente não chega nem à espera. Vale também para
+		// quem retirou o consentimento e tenta voltar à sala (a credencial do Jitsi não é reemitida).
+		if (!consulta.aceitaConsentimento()) {
+			throw negado(); // consulta encerrada: nada a dizer
+		}
+		if (consulta.getConsentimentoEm() == null) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "O consentimento ao termo é necessário para o atendimento por vídeo.");
+		}
 		if (consulta.registrarChegadaDoPaciente()) {
 			auditoria.registrar("paciente", "PACIENTE_NA_ESPERA", "consulta/" + consulta.getId());
 		}

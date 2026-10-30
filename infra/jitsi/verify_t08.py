@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import verify_auth  # noqa: E402
-from verify_t07 import api, papel  # noqa: E402
+from verify_t07 import api, consentir, papel  # noqa: E402
 
 CPF = "529.982.247-25"
 
@@ -37,6 +37,7 @@ def main():
 
     # O médico ainda não está na sala. O paciente passa pelo CPF e fica em espera.
     _, ent = api(base, f"/api/salas/{sala}/validar-cpf", {"cpf": CPF})
+    consentir(base, consulta, ent["tokenEntrada"])  # sem o termo aceito o paciente nem chega à espera
     st, esp = api(base, f"/api/salas/{sala}/token", {"tokenEntrada": ent["tokenEntrada"]})
     conferir("paciente que chega antes do médico fica em espera (202, sem JWT)", st == 202 and esp.get("jwt") is None, esp.get("estado", ""))
 

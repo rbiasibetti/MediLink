@@ -103,15 +103,15 @@ describe('ConsultaMedico', () => {
 
     expect(api.aceitar).toHaveBeenCalledWith('c1');
     expect(f.nativeElement.textContent).toContain('Consulta em andamento');
-    expect(f.nativeElement.textContent).toContain('Transcrição autorizada');
+    expect(f.nativeElement.textContent).toContain('Consulta sendo registrada');
   });
 
-  it('sem consentimento avisa que não haverá transcrição', async () => {
+  it('consulta em andamento sem registro (consentimento retirado) avisa o médico para encerrar', async () => {
     const api = { tokenMedico: vi.fn(() => of(sessao)), detalhe: vi.fn(() => of(detalhe('EM_ANDAMENTO'))) };
     const f = montar(api);
     await assentar(f);
 
-    expect(f.nativeElement.textContent).toContain('Sem consentimento: não haverá transcrição');
+    expect(f.nativeElement.textContent).toContain('esta consulta não está sendo registrada');
   });
 
   it('pede a transcrição ao Jitsi só enquanto a captura está autorizada (consentimento + consulta em andamento)', async () => {

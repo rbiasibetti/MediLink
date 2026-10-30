@@ -79,6 +79,7 @@ class ConsentimentoApiTest {
 
 	/** O paciente chega e o médico o aceita: a consulta passa a EM_ANDAMENTO. */
 	private void iniciar(Consulta c) throws Exception {
+		consentir(c, c.entrada(), true, "v2").andExpect(status().isOk()); // sem consentir o paciente nem chega à espera
 		mvc.perform(post("/api/salas/" + c.room() + "/token").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"tokenEntrada\":\"" + c.entrada() + "\"}")).andExpect(status().isAccepted());
 		mvc.perform(post("/api/consultas/" + c.id() + "/aceite").with(user(emailMedico))).andExpect(status().isOk());
@@ -88,26 +89,37 @@ class ConsentimentoApiTest {
 	void termoEPublicoETemVersao() throws Exception {
 		mvc.perform(get("/api/termo-consentimento"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.versao").value("v1"))
+				.andExpect(jsonPath("$.versao").value("v2"))
 				.andExpect(content().string(containsString("transcrição")))
 				.andExpect(content().string(containsString("apagado")));
 	}
 
 	@Test
-	void semConsentimentoACapturaNaoEhAutorizadaMesmoComConsultaEmAndamento() throws Exception {
+	void semConsentimentoOPacienteNaoChegaNemAEspera() throws Exception {
 		Consulta c = preparar();
-		iniciar(c);
 
-		detalhe(c).andExpect(jsonPath("$.status").value("EM_ANDAMENTO"))
-				.andExpect(jsonPath("$.consentimentoEm").doesNotExist())
+		mvc.perform(post("/api/salas/" + c.room() + "/token").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tokenEntrada\":\"" + c.entrada() + "\"}")).andExpect(status().isConflict());
+
+		detalhe(c).andExpect(jsonPath("$.status").value("CRIADA")).andExpect(jsonPath("$.pacienteAguardando").value(false))
 				.andExpect(jsonPath("$.capturaAutorizada").value(false));
+	}
+
+	@Test
+	void medicoNaoAceitaPacienteQueNaoConsentiu() throws Exception {
+		Consulta c = preparar();
+		jdbc.update("UPDATE consulta SET status = 'AGUARDANDO_PACIENTE' WHERE id = ?", UUID.fromString(c.id())); // estado impossível pela API
+
+		mvc.perform(post("/api/consultas/" + c.id() + "/aceite").with(user(emailMedico))).andExpect(status().isConflict());
+
+		detalhe(c).andExpect(jsonPath("$.status").value("AGUARDANDO_PACIENTE"));
 	}
 
 	@Test
 	void consentimentoSozinhoNaoAutorizaACapturaAntesDeIniciar() throws Exception {
 		Consulta c = preparar();
 
-		consentir(c, c.entrada(), true, "v1").andExpect(status().isOk()).andExpect(jsonPath("$.consentimentoVigente").value(true));
+		consentir(c, c.entrada(), true, "v2").andExpect(status().isOk()).andExpect(jsonPath("$.consentimentoVigente").value(true));
 
 		detalhe(c).andExpect(jsonPath("$.status").value("CRIADA")).andExpect(jsonPath("$.capturaAutorizada").value(false));
 	}
@@ -115,45 +127,37 @@ class ConsentimentoApiTest {
 	@Test
 	void consentimentoMaisConsultaEmAndamentoAutorizamACaptura() throws Exception {
 		Consulta c = preparar();
-		consentir(c, c.entrada(), true, "v1").andExpect(status().isOk());
+		consentir(c, c.entrada(), true, "v2").andExpect(status().isOk());
 		iniciar(c);
 
 		detalhe(c).andExpect(jsonPath("$.capturaAutorizada").value(true))
 				.andExpect(jsonPath("$.consentimentoEm").exists())
-				.andExpect(jsonPath("$.consentimentoVersao").value("v1"));
+				.andExpect(jsonPath("$.consentimentoVersao").value("v2"));
 	}
 
 	@Test
-	void consentirComAConsultaJaEmAndamentoTambemFunciona() throws Exception {
-		Consulta c = preparar();
-		iniciar(c);
-
-		consentir(c, c.entrada(), true, "v1").andExpect(status().isOk());
-
-		detalhe(c).andExpect(jsonPath("$.capturaAutorizada").value(true));
-	}
-
-	@Test
-	void recusarNaoBloqueiaAConsultaMasNaoHaCaptura() throws Exception {
+	void recusarImpedeOAcessoASala() throws Exception {
 		Consulta c = preparar();
 
-		consentir(c, c.entrada(), false, "v1").andExpect(status().isOk()).andExpect(jsonPath("$.consentimentoVigente").value(false));
-		iniciar(c);
+		consentir(c, c.entrada(), false, "v2").andExpect(status().isOk()).andExpect(jsonPath("$.consentimentoVigente").value(false));
 
-		detalhe(c).andExpect(jsonPath("$.status").value("EM_ANDAMENTO")).andExpect(jsonPath("$.capturaAutorizada").value(false));
+		mvc.perform(post("/api/salas/" + c.room() + "/token").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tokenEntrada\":\"" + c.entrada() + "\"}")).andExpect(status().isConflict());
+		detalhe(c).andExpect(jsonPath("$.status").value("CRIADA")).andExpect(jsonPath("$.capturaAutorizada").value(false));
 		assertThat(auditoria.findByRecursoOrderByMomento("consulta/" + c.id())).extracting("acao").contains("CONSENTIMENTO_RECUSADO");
 	}
 
 	@Test
-	void retirarOConsentimentoInterrompeAAutorizacao() throws Exception {
+	void quemRetiraOConsentimentoNaoRecebeNovaCredencialDoJitsi() throws Exception {
 		Consulta c = preparar();
-		consentir(c, c.entrada(), true, "v1");
 		iniciar(c);
 		detalhe(c).andExpect(jsonPath("$.capturaAutorizada").value(true));
 
-		consentir(c, c.entrada(), false, "v1").andExpect(status().isOk());
+		consentir(c, c.entrada(), false, "v2").andExpect(status().isOk());
 
 		detalhe(c).andExpect(jsonPath("$.capturaAutorizada").value(false)).andExpect(jsonPath("$.consentimentoEm").doesNotExist());
+		mvc.perform(post("/api/salas/" + c.room() + "/token").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tokenEntrada\":\"" + c.entrada() + "\"}")).andExpect(status().isConflict()); // não volta à sala
 		assertThat(auditoria.findByRecursoOrderByMomento("consulta/" + c.id())).extracting("acao")
 				.contains("CONSENTIMENTO_REGISTRADO", "CONSENTIMENTO_REVOGADO");
 	}
@@ -161,17 +165,17 @@ class ConsentimentoApiTest {
 	@Test
 	void guardaAVersaoDoTermoNoBanco() throws Exception {
 		Consulta c = preparar();
-		consentir(c, c.entrada(), true, "v1");
+		consentir(c, c.entrada(), true, "v2");
 
 		String versao = jdbc.queryForObject("SELECT consentimento_versao FROM consulta WHERE id = ?", String.class, UUID.fromString(c.id()));
-		assertThat(versao).isEqualTo("v1");
+		assertThat(versao).isEqualTo("v2");
 	}
 
 	@Test
 	void versaoDeTermoDiferenteDaVigenteEhRejeitada() throws Exception {
 		Consulta c = preparar();
 
-		consentir(c, c.entrada(), true, "v0").andExpect(status().isConflict());
+		consentir(c, c.entrada(), true, "v1").andExpect(status().isConflict());
 		detalhe(c).andExpect(jsonPath("$.consentimentoEm").doesNotExist());
 	}
 
@@ -180,10 +184,10 @@ class ConsentimentoApiTest {
 		Consulta a = preparar();
 		Consulta b = preparar();
 
-		consentir(a, "lixo", true, "v1").andExpect(status().isForbidden());
-		consentir(a, b.entrada(), true, "v1").andExpect(status().isForbidden());
+		consentir(a, "lixo", true, "v2").andExpect(status().isForbidden());
+		consentir(a, b.entrada(), true, "v2").andExpect(status().isForbidden());
 		mvc.perform(post("/api/consultas/" + UUID.randomUUID() + "/consentimento").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"tokenEntrada\":\"" + a.entrada() + "\",\"aceito\":true,\"versaoTermo\":\"v1\"}")).andExpect(status().isForbidden());
+				.content("{\"tokenEntrada\":\"" + a.entrada() + "\",\"aceito\":true,\"versaoTermo\":\"v2\"}")).andExpect(status().isForbidden());
 		detalhe(a).andExpect(jsonPath("$.consentimentoEm").doesNotExist());
 		detalhe(b).andExpect(jsonPath("$.consentimentoEm").doesNotExist());
 	}
@@ -193,7 +197,7 @@ class ConsentimentoApiTest {
 		Consulta c = preparar();
 
 		mvc.perform(post("/api/consultas/" + c.id() + "/consentimento").with(user(emailMedico)).contentType(MediaType.APPLICATION_JSON)
-				.content("{\"aceito\":true,\"versaoTermo\":\"v1\"}")).andExpect(status().isForbidden());
+				.content("{\"aceito\":true,\"versaoTermo\":\"v2\"}")).andExpect(status().isForbidden());
 		detalhe(c).andExpect(jsonPath("$.consentimentoEm").doesNotExist());
 	}
 
@@ -202,13 +206,13 @@ class ConsentimentoApiTest {
 		Consulta c = preparar();
 		jdbc.update("UPDATE consulta SET status = 'ENCERRADA' WHERE id = ?", UUID.fromString(c.id()));
 
-		consentir(c, c.entrada(), true, "v1").andExpect(status().isConflict());
+		consentir(c, c.entrada(), true, "v2").andExpect(status().isConflict());
 	}
 
 	@Test
 	void respostaAoPacienteNaoVazaDadosDaConsulta() throws Exception {
 		Consulta c = preparar();
 
-		consentir(c, c.entrada(), true, "v1").andExpect(content().json("{\"consentimentoVigente\":true,\"versaoDoTermo\":\"v1\"}", true));
+		consentir(c, c.entrada(), true, "v2").andExpect(content().json("{\"consentimentoVigente\":true,\"versaoDoTermo\":\"v2\"}", true));
 	}
 }

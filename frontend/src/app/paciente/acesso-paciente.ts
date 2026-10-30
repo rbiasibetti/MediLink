@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -8,11 +8,12 @@ import { Acesso, Api, Sessao, Termo } from '../core/api';
 import { INTERVALO_ESPERA_MS } from '../core/config';
 import { JitsiRoom } from '../core/jitsi-room';
 
-type Etapa = 'carregando' | 'indisponivel' | 'cpf' | 'espera' | 'sala' | 'saiu' | 'expirou';
+type Etapa = 'carregando' | 'indisponivel' | 'cpf' | 'termo' | 'recusou' | 'espera' | 'sala' | 'retirou' | 'saiu' | 'expirou';
 
 /**
  * Jornada do paciente a partir do link da consulta:
- * (CPF, se o médico exigir) → consentimento → espera do aceite do médico → sala.
+ * (CPF, se o médico exigir) → termo de consentimento → espera do aceite do médico → sala.
+ * Toda teleconsulta é registrada: sem aceitar o termo o paciente não chega à espera nem à sala.
  * O CPF só trafega no corpo de um POST; nunca na URL, em log ou em storage.
  */
 @Component({
@@ -56,42 +57,54 @@ type Etapa = 'carregando' | 'indisponivel' | 'cpf' | 'espera' | 'sala' | 'saiu' 
           </section>
         }
 
+        @case ('termo') {
+          <section class="card">
+            <h1>Antes de entrar</h1>
+            @if (termo(); as t) {
+              <p>Toda teleconsulta é registrada. Leia o termo abaixo: é preciso aceitá-lo para fazer o atendimento por vídeo.</p>
+              <pre class="termo" tabindex="0" aria-label="Texto do termo de consentimento">{{ t.texto }}</pre>
+              @if (erro()) { <p class="erro" role="alert">{{ erro() }}</p> }
+              <div class="acoes">
+                <button class="btn" type="button" (click)="decidir(true)" [disabled]="enviando()">Li e aceito</button>
+                <button class="btn secundario" type="button" (click)="decidir(false)" [disabled]="enviando()">Não aceito</button>
+              </div>
+            } @else {
+              @if (erro()) { <p class="erro" role="alert">{{ erro() }}</p> } @else { <p role="status">Carregando…</p> }
+            }
+          </section>
+        }
+
+        @case ('recusou') {
+          <section class="card">
+            <h1>Atendimento por vídeo não realizado</h1>
+            <p>Sem aceitar o termo não é possível fazer a teleconsulta, porque toda consulta é registrada. Entre em contato com o consultório para combinar outra forma de atendimento.</p>
+            <button class="btn secundario" type="button" (click)="lerTermoDeNovo()">Ler o termo novamente</button>
+          </section>
+        }
+
+        @case ('retirou') {
+          <section class="card">
+            <h1>Consentimento retirado</h1>
+            <p>A captação foi interrompida e a sua participação nesta teleconsulta foi encerrada. Entre em contato com o consultório para combinar a continuidade do atendimento.</p>
+            <button class="btn secundario" type="button" (click)="lerTermoDeNovo()">Ler o termo novamente</button>
+          </section>
+        }
+
         @case ('espera') {
           <section class="card">
             <h1>Sala de espera</h1>
-            @if (termo(); as t) {
-              @if (decisao() === null) {
-                <h2>Consentimento</h2>
-                <pre class="termo" tabindex="0" aria-label="Texto do termo de consentimento">{{ t.texto }}</pre>
-                @if (erro()) { <p class="erro" role="alert">{{ erro() }}</p> }
-                <div class="acoes">
-                  <button class="btn" type="button" (click)="decidir(true)" [disabled]="!consultaId() || enviando()">Aceito</button>
-                  <button class="btn secundario" type="button" (click)="decidir(false)" [disabled]="!consultaId() || enviando()">Não aceito</button>
-                </div>
-                <p class="muted">Recusar não impede o atendimento; a consulta acontece sem transcrição.</p>
-              } @else {
-                <p role="status" aria-live="polite">
-                  Aguardando o médico liberar a sua entrada. Mantenha esta página aberta.
-                </p>
-                <p class="muted">
-                  @if (decisao() === 'aceito') { Consentimento registrado. } @else { Você não autorizou a transcrição. }
-                </p>
-              }
-            } @else {
-              <p role="status">Carregando…</p>
-            }
+            <p role="status" aria-live="polite">
+              Aguardando o médico liberar a sua entrada. Mantenha esta página aberta.
+            </p>
+            <p class="muted">Consentimento registrado.</p>
           </section>
         }
 
         @case ('sala') {
           @if (sessao(); as s) {
             <div class="barra">
-              @if (decisao() === 'aceito') {
-                <span>Transcrição autorizada.</span>
-                <button class="link" type="button" (click)="retirarConsentimento()">Retirar consentimento</button>
-              } @else {
-                <span>Transcrição não autorizada.</span>
-              }
+              <span>Consulta registrada, com a sua autorização.</span>
+              <button class="link" type="button" (click)="retirarConsentimento()">Retirar consentimento e sair</button>
             </div>
             <div class="jitsi-wrap">
               <app-jitsi-room [roomName]="s.roomName" [jwt]="s.jwt!" papel="paciente" (participante)="registrarParticipante($event)" (saiu)="aoSair()" />
@@ -120,10 +133,8 @@ export class AcessoPaciente {
   protected readonly erro = signal<string | null>(null);
   protected readonly enviando = signal(false);
   protected readonly termo = signal<Termo | null>(null);
-  protected readonly decisao = signal<'aceito' | 'recusado' | null>(null);
   protected readonly consultaId = signal<string | null>(null);
   protected readonly sessao = signal<Sessao | null>(null);
-  protected readonly liberado = computed(() => this.sessao() !== null && this.decisao() !== null);
 
   private tokenEntrada: string | null = null;
   private espera: ReturnType<typeof setTimeout> | null = null;
@@ -136,7 +147,6 @@ export class AcessoPaciente {
   protected reiniciar(): void {
     this.pararEspera();
     this.sessao.set(null);
-    this.decisao.set(null);
     this.erro.set(null);
     this.etapa.set('carregando');
     this.carregar();
@@ -165,7 +175,8 @@ export class AcessoPaciente {
         this.enviando.set(false);
         this.cpf.set('');
         this.tokenEntrada = e.tokenEntrada;
-        this.iniciarEspera();
+        this.consultaId.set(e.consultaId);
+        this.irParaOTermo();
       },
       error: (e: HttpErrorResponse) => {
         this.enviando.set(false);
@@ -177,10 +188,16 @@ export class AcessoPaciente {
     });
   }
 
-  private iniciarEspera(): void {
-    this.etapa.set('espera');
+  private irParaOTermo(): void {
+    this.erro.set(null);
+    this.etapa.set('termo');
     this.api.termo().subscribe({ next: (t) => this.termo.set(t), error: () => this.erro.set('Não foi possível carregar o termo.') });
-    this.consultar();
+  }
+
+  protected lerTermoDeNovo(): void {
+    this.pararEspera();
+    this.sessao.set(null);
+    this.irParaOTermo();
   }
 
   /** Repete a chamada até o médico aceitar; cada resposta 202 mantém o paciente em espera. */
@@ -190,12 +207,13 @@ export class AcessoPaciente {
         this.consultaId.set(s.consultaId);
         if (s.estado === 'ADMITIDO') {
           this.sessao.set(s);
-          this.avancarSeLiberado();
+          this.etapa.set('sala');
         } else {
           this.espera = setTimeout(() => this.consultar(), INTERVALO_ESPERA_MS);
         }
       },
-      error: () => this.etapa.set('expirou'),
+      // 409: o consentimento deixou de valer (retirado em outra aba, por exemplo); volta ao termo.
+      error: (e: HttpErrorResponse) => (e.status === 409 ? this.irParaOTermo() : this.etapa.set('expirou')),
     });
   }
 
@@ -208,8 +226,12 @@ export class AcessoPaciente {
     this.api.consentir(c, this.tokenEntrada, aceito, t.versao).subscribe({
       next: () => {
         this.enviando.set(false);
-        this.decisao.set(aceito ? 'aceito' : 'recusado');
-        this.avancarSeLiberado();
+        if (aceito) {
+          this.etapa.set('espera');
+          this.consultar();
+        } else {
+          this.etapa.set('recusou'); // sem o aceite não há atendimento por vídeo
+        }
       },
       error: (e: HttpErrorResponse) => {
         this.enviando.set(false);
@@ -218,17 +240,18 @@ export class AcessoPaciente {
     });
   }
 
-  /** Retirada do consentimento durante a consulta: a captação deixa de ser autorizada. */
+  /** Retirada do consentimento durante a consulta: a captação para e o paciente deixa a sala (o iframe é descartado). */
   protected retirarConsentimento(): void {
     const t = this.termo();
     const c = this.consultaId();
     if (!t || !c || !this.tokenEntrada) return;
-    this.api.consentir(c, this.tokenEntrada, false, t.versao).subscribe({ next: () => this.decisao.set('recusado') });
-  }
-
-  /** Só entra na sala admitido pelo médico E depois de ter respondido ao termo. */
-  private avancarSeLiberado(): void {
-    if (this.liberado()) this.etapa.set('sala');
+    this.api.consentir(c, this.tokenEntrada, false, t.versao).subscribe({
+      next: () => {
+        this.sessao.set(null);
+        this.etapa.set('retirou');
+      },
+      error: () => this.erro.set('Não foi possível registrar a retirada. Tente de novo.'),
+    });
   }
 
   /** Informa o endpoint do Jitsi ao backend (rotula o áudio do paciente). Falha não atrapalha a consulta. */

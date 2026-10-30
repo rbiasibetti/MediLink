@@ -74,8 +74,16 @@ class SessaoJitsiApiTest {
 	}
 
 	private String tokenDeEntrada(Sala s, String cpf) throws Exception {
-		return campo(mvc.perform(post("/api/salas/" + s.room() + "/validar-cpf").contentType(MediaType.APPLICATION_JSON)
+		String entrada = campo(mvc.perform(post("/api/salas/" + s.room() + "/validar-cpf").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"cpf\":\"" + cpf + "\"}")).andExpect(status().isOk()), "tokenEntrada");
+		consentir(s, entrada);
+		return entrada;
+	}
+
+	/** Sem o consentimento ao termo o paciente não chega à espera: o fluxo real é CPF, termo, espera. */
+	private void consentir(Sala s, String entrada) throws Exception {
+		mvc.perform(post("/api/consultas/" + s.consultaId() + "/consentimento").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tokenEntrada\":\"" + entrada + "\",\"aceito\":true,\"versaoTermo\":\"v2\"}")).andExpect(status().isOk());
 	}
 
 	private ResultActions trocar(String room, String tokenEntrada) throws Exception {
@@ -148,6 +156,7 @@ class SessaoJitsiApiTest {
 	void comValidacaoDesativadaOPacienteTambemPassaPelaTroca() throws Exception {
 		Sala s = criar(false);
 		String entrada = campo(mvc.perform(post("/api/salas/" + s.room() + "/validar-cpf")).andExpect(status().isOk()), "tokenEntrada");
+		consentir(s, entrada);
 
 		admitir(s, entrada);
 		trocar(s.room(), entrada).andExpect(status().isOk());

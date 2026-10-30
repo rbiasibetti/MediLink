@@ -40,11 +40,14 @@ type Estado = 'carregando' | 'sala' | 'saiu' | 'erro';
                 } @else {
                   <span>Aguardando o paciente chegar…</span>
                 }
-                <span class="muted">
-                  @if (d.capturaAutorizada) { Transcrição autorizada pelo paciente. }
-                  @else if (d.consentimentoEm) { Consentimento registrado; a captura começa com a consulta. }
-                  @else { Sem consentimento: não haverá transcrição. }
-                </span>
+                @if (d.status === 'EM_ANDAMENTO' && !d.capturaAutorizada) {
+                  <span class="erro" role="alert"><strong>Atenção: esta consulta não está sendo registrada</strong> (o paciente retirou o consentimento). Encerre a consulta.</span>
+                } @else {
+                  <span class="muted">
+                    @if (d.capturaAutorizada) { Consulta sendo registrada, com o consentimento do paciente. }
+                    @else { Paciente com termo aceito; o registro começa com a consulta. }
+                  </span>
+                }
               }
             </div>
             <div class="jitsi-wrap">

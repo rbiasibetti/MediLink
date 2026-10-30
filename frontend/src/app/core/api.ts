@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { MedicoAuth } from './medico-auth';
 
 export interface Acesso { medicoNome: string; dataHora: string; cpfObrigatorio: boolean }
-export interface Entrada { tokenEntrada: string; expiraEm: string }
+export interface Entrada { tokenEntrada: string; expiraEm: string; consultaId: string }
 export interface Termo { versao: string; texto: string }
 export interface Situacao { consentimentoVigente: boolean; versaoDoTermo: string | null }
 

@@ -3,7 +3,8 @@
 
 Cenário A (com consentimento): o paciente consente, o médico aceita, os dois entram e o médico pede a transcrição.
   Esperado: um arquivo Ogg Opus por participante, válido, e NADA gravado antes do aceite.
-Cenário B (sem consentimento): idem, mas o paciente não consente. Esperado: nenhum arquivo de áudio.
+Cenário B (recusa): o paciente não aceita o termo. Esperado: ele não chega nem à espera (409), a consulta não começa
+e nenhum arquivo de áudio é gravado (toda consulta é registrada, então sem consentimento não há atendimento).
 
 Pré-requisitos: Jitsi no ar (dev.sh up), backend em dev em :8090 (com MEDILINK_SINK_TOKEN), porta 4200 livre
 (pare o ng serve) e Chrome. O Chrome de teste usa perfil temporário e --ignore-certificate-errors só para localhost.
@@ -39,6 +40,12 @@ def conferir(nome, ok, detalhe=""):
     print(f"[{'OK ' if ok else 'ERRO'}] {nome}" + (f" -> {detalhe}" if detalhe else ""), flush=True)
     if not ok:
         falhas.append(nome)
+
+
+def versao_termo():
+    """Versão vigente do termo (muda quando o termo evolui; o consentimento exige a vigente)."""
+    with urllib.request.urlopen(BACKEND + "/api/termo-consentimento", timeout=20) as r:
+        return json.loads(r.read().decode())["versao"]
 
 
 def api(caminho, corpo=None, auth=None, metodo="POST"):
@@ -136,11 +143,17 @@ def cenario(auth, nome, consentir):
     sala, consulta = ag["roomName"], ag["consultaId"]
     _, med = api(f"/api/agendamentos/{ag['id']}/token-jitsi", None, auth)
     _, ent = api(f"/api/salas/{sala}/validar-cpf", {"cpf": CPF})
+    if not consentir:
+        api(f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": ent["tokenEntrada"], "aceito": False, "versaoTermo": versao_termo()})
+        st, _ = api(f"/api/salas/{sala}/token", {"tokenEntrada": ent["tokenEntrada"]})
+        conferir("quem recusa o termo não chega nem à espera (409)", st == 409)
+        st, _ = api(f"/api/consultas/{consulta}/aceite", None, auth)
+        conferir("o médico não consegue aceitar quem não consentiu (409)", st == 409)
+        return [], 0, consulta
+    st, _ = api(f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": ent["tokenEntrada"], "aceito": True, "versaoTermo": versao_termo()})
+    conferir("paciente consente", st == 200)
     st, _ = api(f"/api/salas/{sala}/token", {"tokenEntrada": ent["tokenEntrada"]})
     conferir("paciente chega e fica em espera", st == 202)
-    if consentir:
-        st, _ = api(f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": ent["tokenEntrada"], "aceito": True, "versaoTermo": "v1"})
-        conferir("paciente consente", st == 200)
 
     pasta_tmp = tempfile.mkdtemp(prefix="medilink-e2e-")   # perfis do Chrome; removida ao final
     perfis, procs = [tempfile.mkdtemp(dir=pasta_tmp), tempfile.mkdtemp(dir=pasta_tmp)], []
@@ -201,8 +214,8 @@ def main():
                      abs(info["duracao"] - gravado) < 2.5)
             conferir(f"{arq.name}: permissão só do dono", (arq.stat().st_mode & 0o777) == 0o600)
 
-        arquivos_b, _, _ = cenario(auth, "B: sem consentimento", False)
-        conferir("sem consentimento NENHUM áudio é gravado", len(arquivos_b) == 0, f"{len(arquivos_b)} arquivo(s)")
+        arquivos_b, _, _ = cenario(auth, "B: recusa do termo", False)
+        conferir("quem recusa o termo: NENHUM áudio é gravado", len(arquivos_b) == 0, f"{len(arquivos_b)} arquivo(s)")
     finally:
         servidor.shutdown()
     sys.exit(1 if falhas else 0)

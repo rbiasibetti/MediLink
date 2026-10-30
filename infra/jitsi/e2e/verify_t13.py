@@ -81,10 +81,9 @@ def main():
         st2, _ = base.api(f"/api/consultas/{consulta}/transcricao", None, auth, metodo="GET")
         base.conferir("a transcrição continua disponível depois do descarte", st2 == 200)
 
-        consulta_b = t12.cenario(auth, "B: sem consentimento", False, wav_m, wav_p, None)
-        print("aguardando o backend concluir o job sem áudio…", flush=True)
-        stb, _, vistos_b = esperar_transcricao(consulta_b, auth, 90)
-        base.conferir("sem consentimento não há transcrição (404)", stb == 404, f"respostas vistas: {vistos_b}")
+        consulta_b = t12.cenario(auth, "B: recusa do termo", False, wav_m, wav_p, None)
+        stb, _ = base.api(f"/api/consultas/{consulta_b}/transcricao", None, auth, metodo="GET")
+        base.conferir("quem recusa o termo não tem consulta nem transcrição (a consulta segue aberta: 409)", stb == 409, str(stb))
         base.conferir("e não ficou pasta de áudio", not (SINK / consulta_b).exists())
     finally:
         servidor.shutdown()

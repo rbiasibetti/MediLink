@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class TermoConsentimento {
 
-	public static final String VERSAO = "v1";
+	public static final String VERSAO = "v2";
 
 	public record Termo(String versao, String texto) {
 	}

@@ -36,6 +36,13 @@ def api(base, caminho, corpo=None, auth=None):
         return e.code, {}
 
 
+def consentir(base, consulta, entrada):
+    """Toda teleconsulta é registrada: sem aceitar o termo vigente o paciente não chega à espera (409)."""
+    with urllib.request.urlopen(base + "/api/termo-consentimento", timeout=20) as r:
+        versao = json.loads(r.read().decode())["versao"]
+    return api(base, f"/api/consultas/{consulta}/consentimento", {"tokenEntrada": entrada, "aceito": True, "versaoTermo": versao})
+
+
 def papel(xml, nick):
     """(afiliação, papel) do ocupante `nick` na presença da sala, ou None."""
     for m in re.finditer(r"<presence[^>]*from='[^']*/" + re.escape(nick) + r"'.*?</presence>", xml, re.S):
@@ -73,6 +80,10 @@ def main():
 
     st, ent = api(base, f"/api/salas/{sala}/validar-cpf", {"cpf": CPF})
     conferir("CPF correto gera token de entrada", st == 200)
+    st, _ = api(base, f"/api/salas/{sala}/token", {"tokenEntrada": ent["tokenEntrada"]})
+    conferir("sem aceitar o termo o paciente não chega nem à espera (409)", st == 409)
+    st, _ = consentir(base, ag["consultaId"], ent["tokenEntrada"])
+    conferir("paciente aceita o termo", st == 200)
     # T08: o paciente espera e o médico o aceita antes de a troca devolver o JWT.
     st, _ = api(base, f"/api/salas/{sala}/token", {"tokenEntrada": ent["tokenEntrada"]})
     conferir("paciente fica em espera até o aceite (202)", st == 202)

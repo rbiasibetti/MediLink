@@ -122,7 +122,7 @@ sequenceDiagram
     M->>B: agenda (nome, CPF, data) e envia o link por e-mail
     Pa->>B: abre o link e confirma o CPF
     B-->>Pa: token de entrada (10 min)
-    Pa->>B: consente (termo v1) e entra na espera
+    Pa->>B: aceita o termo (obrigatório: sem aceitar não há atendimento) e entra na espera
     M->>B: pede a credencial do host
     B-->>M: JWT de moderador
     M->>J: entra na sala
@@ -333,7 +333,7 @@ Rotas do **médico** exigem autenticação (HTTP Basic provisório); as do **pac
 | `POST` | `/api/salas/{roomName}/validar-cpf` | paciente | Valida o CPF e devolve o token de entrada |
 | `POST` | `/api/salas/{roomName}/token` | paciente | `202` enquanto aguarda o aceite; `200` com o JWT depois |
 | `GET` | `/api/termo-consentimento` | paciente | Termo vigente (versão e texto) |
-| `POST` | `/api/consultas/{id}/consentimento` | paciente | Registra, recusa ou retira o consentimento |
+| `POST` | `/api/consultas/{id}/consentimento` | paciente | Registra, recusa ou retira o consentimento. **Sem aceitar, `POST /api/salas/{room}/token` responde `409`**: o paciente não chega à espera |
 | `WS` | `/api/audio-sink/{meetingId}?sala={roomName}` | JVB | Recebe o áudio (autenticado por `Authorization: Bearer`) |
 | `GET` | `/actuator/health` | público | Saúde da aplicação |
 
@@ -345,7 +345,7 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 - **Link e sala**: nome da sala com 128 bits aleatórios; um JWT HS256 por sala, com expiração; o paciente nunca recebe moderação.
 - **Aceite no backend**: a credencial do Jitsi do paciente só é emitida depois do aceite do médico. Como a sala do Jitsi nasce aberta, esse portão fica no backend, e sem JWT ninguém entra.
 - **Interface do Jitsi não exposta**: navegação direta (`Sec-Fetch-Dest: document`) recebe 403 e só o iframe do MediLink carrega a interface; `frame-ancestors` restringe quem pode embutir. É uma camada de ocultação; **a fronteira de segurança é o JWT**.
-- **Consentimento**: termo versionado, com a versão gravada junto da data; o paciente pode recusar ou retirar. O **audio sink confere o consentimento por conta própria** a cada segundo e descarta o áudio sem ele, independentemente de quem pediu a exportação.
+- **Consentimento obrigatório**: toda teleconsulta é registrada, então quem não aceita o termo não chega à sala de espera nem à sala (o médico também não consegue aceitá-lo). Quem retira o consentimento no meio da consulta perde a credencial e a tela encerra a participação; o médico vê um alerta. Termo versionado, com a versão gravada junto da data. O **audio sink confere o consentimento por conta própria** a cada segundo e descarta o áudio sem ele, independentemente de quem pediu a exportação.
 - **Fila e worker**: o job só tem referências (nada de áudio, texto, CPF ou nome); o worker valida o caminho do arquivo, nunca registra o texto em log e, em falha, devolve só o tipo do erro. O **resultado carrega o texto da consulta** (dado sensível de saúde): o tópico precisa de controle de acesso e cifragem (T14).
 - **Cifragem em repouso (AES-256-GCM)**: o áudio é gravado já cifrado (`.opus.enc`) e o worker o decifra só em memória; as colunas da transcrição guardam `enc:…`. Um dump do banco ou um `cat` no disco não mostram a consulta. Chave mestra fora do git e do banco; formato e rotação em [`docs/plan.md`](docs/plan.md).
 - **Retenção**: tentativas de CPF (24 h), teto de guarda do áudio mesmo de job que falhou (7 dias), prazo opcional da transcrição e tópicos da fila (24 h). Prazos são de partida; a decisão final é do jurídico.
@@ -367,7 +367,7 @@ cd backend && ./run-mssql.sh test
 # worker de transcrição: 39 testes (sem modelo e sem broker)
 cd worker && .venv/bin/python -m pytest -q
 
-# frontend: 38 testes (Vitest)
+# frontend: 41 testes (Vitest)
 cd frontend && npx ng test --watch=false
 
 # ponta a ponta com Jitsi real (pare o ng serve antes: a porta 4200 precisa estar livre)
@@ -387,9 +387,9 @@ Scripts de verificação contra o Prosody real (precisam do Jitsi e do backend e
 | `infra/jitsi/verify_auth.py` | Sem token, com token inválido, adulterado ou de outra sala não entra |
 | `infra/jitsi/verify_t07.py` | Médico entra como moderador e paciente sem moderação |
 | `infra/jitsi/verify_t08.py` | O paciente só entra depois do aceite, mesmo chegando antes do médico |
-| `infra/jitsi/e2e/verify_t11.py` | Com consentimento grava um Ogg Opus válido por participante, nada antes do aceite; sem consentimento, nada |
-| `infra/jitsi/e2e/verify_t12.py` | Médico e paciente falam trechos diferentes em português; o texto chega ao tópico com o locutor certo e na ordem certa; sem consentimento nada é transcrito |
-| `infra/jitsi/e2e/verify_t13.py` | O backend grava a transcrição do resultado; `GET /transcricao` devolve cada fala com o papel certo; a pasta de áudio da consulta é apagada; sem consentimento, `404` e nenhum arquivo |
+| `infra/jitsi/e2e/verify_t11.py` | Com consentimento grava um Ogg Opus (cifrado no disco) por participante, nada antes do aceite; quem recusa o termo não chega à espera e nada é gravado |
+| `infra/jitsi/e2e/verify_t12.py` | Médico e paciente falam trechos diferentes em português; o texto chega ao tópico com o locutor certo e na ordem certa; quem recusa o termo não chega à espera e nada é transcrito |
+| `infra/jitsi/e2e/verify_t13.py` | O backend grava a transcrição do resultado; `GET /transcricao` devolve cada fala com o papel certo; a pasta de áudio da consulta é apagada; quem recusa o termo não chega à espera (`409`) e não gera transcrição |
 
 ## Decisões de arquitetura
 
@@ -424,7 +424,7 @@ A lista completa, com os pontos de atenção de cada item, está em [`docs/tasks
 
 ## Roadmap
 
-Etapas mapeadas, **ainda não iniciadas**, para a próxima sequência:
+Etapas mapeadas, **ainda não iniciadas**, para a próxima sequência (a integração por API key, o acesso do médico por link, a administração e o webhook de devolução estão propostos, com as decisões, em [`docs/plan.md`](docs/plan.md) como T16 a T19):
 
 1. **T15** Escala: vários JVBs, autoscaling dos workers (ou GPU) e teste de carga de 100 a 1.000 salas.
 2. **Endurecimentos:** gatilho da captura no servidor, encerramento por inatividade, login definitivo do médico, renovação do token de entrada, relay de e-mail de produção, container do worker e verificação com pessoas reais.

@@ -58,6 +58,9 @@ public class ConsultaService {
 					c.getStatus() == ConsultaStatus.CRIADA ? "O paciente ainda não chegou à sala de espera."
 							: "A consulta não está mais aberta.");
 		}
+		if (c.getConsentimentoEm() == null) { // defesa em profundidade: o paciente nem chega à espera sem consentir
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "O paciente ainda não consentiu com o termo.");
+		}
 		c.admitirPaciente(Instant.now(clock));
 		auditoria.registrar(medicoEmail, "PACIENTE_ADMITIDO", "consulta/" + c.getId());
 		return detalhe(c);

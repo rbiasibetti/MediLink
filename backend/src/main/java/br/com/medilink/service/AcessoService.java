@@ -4,6 +4,7 @@ import br.com.medilink.domain.Agendamento;
 import br.com.medilink.domain.AgendamentoStatus;
 import br.com.medilink.domain.TentativaCpf;
 import br.com.medilink.repository.AgendamentoRepository;
+import br.com.medilink.repository.ConsultaRepository;
 import br.com.medilink.repository.TentativaCpfRepository;
 import br.com.medilink.service.EntradaTokenService.Emitido;
 import org.springframework.http.HttpHeaders;
@@ -33,15 +34,17 @@ public class AcessoService {
 	static final Duration JANELA = Duration.ofMinutes(15);
 
 	private final AgendamentoRepository agendamentos;
+	private final ConsultaRepository consultas;
 	private final TentativaCpfRepository tentativas;
 	private final CpfHasher cpfHasher;
 	private final EntradaTokenService tokens;
 	private final AuditService auditoria;
 	private final Clock clock;
 
-	public AcessoService(AgendamentoRepository agendamentos, TentativaCpfRepository tentativas, CpfHasher cpfHasher,
+	public AcessoService(AgendamentoRepository agendamentos, ConsultaRepository consultas, TentativaCpfRepository tentativas, CpfHasher cpfHasher,
 			EntradaTokenService tokens, AuditService auditoria, Clock clock) {
 		this.agendamentos = agendamentos;
+		this.consultas = consultas;
 		this.tentativas = tentativas;
 		this.cpfHasher = cpfHasher;
 		this.tokens = tokens;
@@ -93,6 +96,15 @@ public class AcessoService {
 
 		auditoria.registrar("paciente", "CPF_CONFIRMADO", recurso);
 		return tokens.emitir(a.getRoomName(), a.getId());
+	}
+
+	/**
+	 * A consulta da sala, para o paciente que já passou pela porta do CPF: ele precisa do id para responder ao termo
+	 * (o consentimento vem ANTES da espera, então ainda não há resposta de /token que o traga).
+	 */
+	@Transactional(readOnly = true)
+	public java.util.UUID consultaDaSala(String roomName) {
+		return ativo(roomName).flatMap(a -> consultas.findByAgendamentoId(a.getId())).map(c -> c.getId()).orElseThrow(AcessoService::negado);
 	}
 
 	private java.util.Optional<Agendamento> ativo(String roomName) {

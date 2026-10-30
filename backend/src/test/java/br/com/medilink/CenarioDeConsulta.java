@@ -46,7 +46,7 @@ public final class CenarioDeConsulta {
 
 	public void consentir(Consulta c, boolean aceito) throws Exception {
 		mvc.perform(post("/api/consultas/" + c.id() + "/consentimento").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"tokenEntrada\":\"%s\",\"aceito\":%s,\"versaoTermo\":\"v1\"}".formatted(c.entrada(), aceito)))
+				.content("{\"tokenEntrada\":\"%s\",\"aceito\":%s,\"versaoTermo\":\"v2\"}".formatted(c.entrada(), aceito)))
 				.andExpect(status().isOk());
 	}
 

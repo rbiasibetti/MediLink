@@ -120,8 +120,9 @@ class TranscricaoApiTest {
 	}
 
 	@Test
-	void consultaSemAudioNaoTemTranscricao() throws Exception {
-		cenario.consentir(c, false);
+	void consultaSemAudioCapturadoNaoTemTranscricao() throws Exception {
+		// Hoje só acontece por falha técnica da captura (todo paciente consentiu para chegar até aqui).
+		cenario.consentir(c, true);
 		cenario.iniciar(c);
 		cenario.encerrar(c);
 		jobsService.publicarPendentes();

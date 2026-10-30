@@ -63,6 +63,8 @@ class ConsultaAceiteApiTest {
 		String room = grupo(json, "roomName"), consulta = grupo(json, "consultaId");
 		String entrada = grupo(mvc.perform(post("/api/salas/" + room + "/validar-cpf").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"cpf\":\"" + CPF + "\"}")).andReturn().getResponse().getContentAsString(), "tokenEntrada");
+		mvc.perform(post("/api/consultas/" + consulta + "/consentimento").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tokenEntrada\":\"" + entrada + "\",\"aceito\":true,\"versaoTermo\":\"v2\"}")).andExpect(status().isOk());
 		return new Sala(room, consulta, entrada);
 	}
 
@@ -187,6 +189,6 @@ class ConsultaAceiteApiTest {
 		aceitar(s, emailMedico);
 
 		var logs = auditoria.findByRecursoOrderByMomento("consulta/" + s.consultaId());
-		assertThat(logs).extracting("acao").containsExactly("PACIENTE_NA_ESPERA", "PACIENTE_ADMITIDO");
+		assertThat(logs).extracting("acao").containsExactly("CONSENTIMENTO_REGISTRADO", "PACIENTE_NA_ESPERA", "PACIENTE_ADMITIDO");
 	}
 }

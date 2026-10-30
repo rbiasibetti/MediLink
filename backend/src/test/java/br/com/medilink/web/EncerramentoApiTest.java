@@ -54,7 +54,10 @@ class EncerramentoApiTest {
 		String room = campo(json, "roomName");
 		String entrada = campo(mvc.perform(post("/api/salas/" + room + "/validar-cpf").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"cpf\":\"" + CPF + "\"}")).andReturn().getResponse().getContentAsString(), "tokenEntrada");
-		return new Consulta(room, campo(json, "consultaId"), entrada);
+		String consulta = campo(json, "consultaId");
+		mvc.perform(post("/api/consultas/" + consulta + "/consentimento").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tokenEntrada\":\"" + entrada + "\",\"aceito\":true,\"versaoTermo\":\"v2\"}")).andExpect(status().isOk());
+		return new Consulta(room, consulta, entrada);
 	}
 
 	private static String campo(String json, String nome) {
