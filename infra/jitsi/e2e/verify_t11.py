@@ -51,7 +51,8 @@ def versao_termo():
 def api(caminho, corpo=None, auth=None, metodo="POST"):
     h = {"Content-Type": "application/json"}
     if auth:
-        h["Authorization"] = "Basic " + base64.b64encode(auth.encode()).decode()
+        # "Bearer <token>" (sessão do médico por link) é usado como veio; o resto é "usuario:senha" do Basic provisório.
+        h["Authorization"] = auth if auth.startswith("Bearer ") else "Basic " + base64.b64encode(auth.encode()).decode()
     req = urllib.request.Request(BACKEND + caminho, data=None if corpo is None else json.dumps(corpo).encode(), headers=h, method=metodo)
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
