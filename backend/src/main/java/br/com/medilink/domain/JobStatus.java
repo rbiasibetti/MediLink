@@ -13,5 +13,7 @@ public enum JobStatus {
 	/** Transcrição gravada e áudio apagado: o fim do caminho feliz. */
 	CONCLUIDO,
 	/** O worker não conseguiu transcrever; o áudio é mantido. Um novo resultado do worker ainda pode concluir o job. */
-	FALHA_NO_WORKER
+	FALHA_NO_WORKER,
+	/** O áudio passou do prazo máximo de guarda e foi apagado sem transcrição (política de retenção). */
+	EXPIRADO
 }

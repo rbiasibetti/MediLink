@@ -3,3 +3,5 @@ faster-whisper==1.2.1
 confluent-kafka==2.16.1
 # O faster-whisper 1.2.1 declara apenas av>=11, mas chama av.open(metadata_errors=...), removido no PyAV 17+.
 av==16.1.0
+# T14: decifra os arquivos de áudio gravados pelo sink (AES-256-GCM). Mesmo formato do backend (Cifrador.java).
+cryptography==50.0.2

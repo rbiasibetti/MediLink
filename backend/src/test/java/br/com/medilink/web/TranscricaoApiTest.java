@@ -152,6 +152,20 @@ class TranscricaoApiTest {
 				.andExpect(status().isNotFound());
 		assertThat(auditoria.findByRecursoOrderByMomento("consulta/" + c.id()))
 				.filteredOn(a -> a.getAcao().equals("TRANSCRICAO_LIDA")).isEmpty();
+		// A tentativa negada fica registrada, com quem tentou, mesmo a resposta sendo 404.
+		assertThat(auditoria.findByRecursoOrderByMomento("consulta/" + c.id()))
+				.filteredOn(a -> a.getAcao().equals("TRANSCRICAO_ACESSO_NEGADO")).hasSize(1)
+				.allSatisfy(a -> assertThat(a.getAtor()).isEqualTo(outro.emailMedico));
+	}
+
+	@Test
+	void transcricaoOuAudioExpiradosDao410() throws Exception {
+		encerrarComAudioEEnfileirar();
+		jdbc.update("UPDATE transcricao_job SET status = 'EXPIRADO' WHERE consulta_id = ?", consultaId);
+		mvc.perform(get("/api/consultas/" + c.id() + "/transcricao").with(user(cenario.emailMedico))).andExpect(status().isGone());
+
+		jdbc.update("UPDATE transcricao_job SET status = 'CONCLUIDO' WHERE consulta_id = ?", consultaId);
+		mvc.perform(get("/api/consultas/" + c.id() + "/transcricao").with(user(cenario.emailMedico))).andExpect(status().isGone());
 	}
 
 	@Test

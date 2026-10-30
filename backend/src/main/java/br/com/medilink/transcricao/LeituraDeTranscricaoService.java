@@ -53,7 +53,15 @@ public class LeituraDeTranscricaoService {
 	 */
 	@Transactional
 	public Optional<TranscricaoDto> obter(String medicoEmail, UUID consultaId) {
-		Consulta consulta = consultas.daMedico(medicoEmail, consultaId);
+		Consulta consulta;
+		try {
+			consulta = consultas.daMedico(medicoEmail, consultaId);
+		}
+		catch (ResponseStatusException negado) {
+			// Consulta de outro médico (ou inexistente): a tentativa fica registrada, ainda que a resposta seja 404.
+			auditoria.registrarEmTransacaoPropria(medicoEmail, "TRANSCRICAO_ACESSO_NEGADO", "consulta/" + consultaId);
+			throw negado;
+		}
 		Optional<Transcricao> pronta = transcricoes.findByConsultaId(consultaId);
 		if (pronta.isPresent()) {
 			auditoria.registrar(medicoEmail, "TRANSCRICAO_LIDA", "consulta/" + consultaId);
@@ -70,6 +78,10 @@ public class LeituraDeTranscricaoService {
 			case SEM_AUDIO -> throw new ResponseStatusException(HttpStatus.NOT_FOUND, "A consulta não teve áudio capturado: não há transcrição.");
 			case FALHA_NO_ENVIO, FALHA_NO_WORKER -> throw new ResponseStatusException(HttpStatus.CONFLICT,
 					"A transcrição falhou; o áudio foi mantido para nova tentativa.");
+			case EXPIRADO -> throw new ResponseStatusException(HttpStatus.GONE,
+					"O áudio expirou sem ser transcrito; não há transcrição desta consulta.");
+			case CONCLUIDO -> throw new ResponseStatusException(HttpStatus.GONE,
+					"A transcrição desta consulta expirou pela política de retenção.");
 			default -> Optional.empty();
 		};
 	}

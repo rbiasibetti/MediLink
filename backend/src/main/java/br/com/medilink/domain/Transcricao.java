@@ -1,6 +1,8 @@
 package br.com.medilink.domain;
 
+import br.com.medilink.crypto.CifraTextoConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
@@ -28,6 +30,7 @@ public class Transcricao {
 	private Consulta consulta;
 
 	/** NVARCHAR(MAX): texto longo sem NCLOB, que o SQL Server trataria como tipo legado. */
+	@Convert(converter = CifraTextoConverter.class) // cifrado em repouso (T14)
 	@JdbcTypeCode(SqlTypes.NVARCHAR)
 	@Column(nullable = false, length = Length.LONG32)
 	private String texto;
@@ -39,6 +42,7 @@ public class Transcricao {
 	private Instant criadaEm;
 
 	/** As mesmas falas de {@code texto}, em JSON, com papel e tempo de cada uma. */
+	@Convert(converter = CifraTextoConverter.class)
 	@JdbcTypeCode(SqlTypes.NVARCHAR)
 	@Column(nullable = false, length = Length.LONG32)
 	private String segmentos = "[]";

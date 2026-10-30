@@ -12,7 +12,6 @@ import br.com.medilink.repository.ConsultaRepository;
 import br.com.medilink.repository.TranscricaoJobRepository;
 import br.com.medilink.repository.TranscricaoRepository;
 import br.com.medilink.service.AuditService;
-import br.com.medilink.sink.SinkProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,9 +21,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
-import java.nio.file.DirectoryNotEmptyException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -82,21 +78,21 @@ public class ResultadoDaTranscricaoService {
 	private final AudioTransitorioRepository audios;
 	private final ConsultaRepository consultas;
 	private final AuditService auditoria;
-	private final SinkProperties sink;
+	private final ArmazenamentoDeAudio armazenamento;
 	private final TranscricaoProperties props;
 	private final JsonMapper json;
 	private final Clock clock;
 	private final TransactionTemplate tx;
 
 	public ResultadoDaTranscricaoService(TranscricaoJobRepository jobs, TranscricaoRepository transcricoes,
-			AudioTransitorioRepository audios, ConsultaRepository consultas, AuditService auditoria, SinkProperties sink,
-			TranscricaoProperties props, JsonMapper json, Clock clock, PlatformTransactionManager txManager) {
+			AudioTransitorioRepository audios, ConsultaRepository consultas, AuditService auditoria,
+			ArmazenamentoDeAudio armazenamento, TranscricaoProperties props, JsonMapper json, Clock clock, PlatformTransactionManager txManager) {
 		this.jobs = jobs;
 		this.transcricoes = transcricoes;
 		this.audios = audios;
 		this.consultas = consultas;
 		this.auditoria = auditoria;
-		this.sink = sink;
+		this.armazenamento = armazenamento;
 		this.props = props;
 		this.json = json;
 		this.clock = clock;
@@ -127,7 +123,7 @@ public class ResultadoDaTranscricaoService {
 			case TRANSCRITO, CONCLUIDO -> {
 				return Desfecho.JA_PROCESSADA;
 			}
-			case SEM_AUDIO, FALHA_NO_ENVIO -> {
+			case SEM_AUDIO, FALHA_NO_ENVIO, EXPIRADO -> {
 				return Desfecho.IGNORADA;
 			}
 			default -> {
@@ -179,7 +175,7 @@ public class ResultadoDaTranscricaoService {
 				continue;
 			}
 			try {
-				apagarArquivo(consultaId, a.getArquivo());
+				armazenamento.apagar(consultaId, a.getArquivo());
 			}
 			catch (IOException | RuntimeException e) {
 				log.warn("Transcrição: não foi possível apagar um áudio da consulta {} ({}); será repetido", consultaId,
@@ -193,7 +189,7 @@ public class ResultadoDaTranscricaoService {
 		if (!tudoApagado) {
 			return false;
 		}
-		removerPastaVazia(consultaId);
+		armazenamento.removerPastaVazia(consultaId);
 		tx.executeWithoutResult(s -> {
 			TranscricaoJob atual = jobs.findById(jobId).orElseThrow();
 			atual.marcar(JobStatus.CONCLUIDO, Instant.now(clock));
@@ -211,30 +207,6 @@ public class ResultadoDaTranscricaoService {
 			}
 		}
 		return concluidos;
-	}
-
-	/** O caminho vem do banco, mas é conferido mesmo assim: precisa ficar dentro da pasta da consulta, no diretório do sink. */
-	private void apagarArquivo(UUID consultaId, String relativo) throws IOException {
-		Path base = sink.dir().toAbsolutePath().normalize();
-		Path pastaDaConsulta = base.resolve(consultaId.toString()).normalize();
-		Path arquivo = base.resolve(relativo).normalize();
-		if (!arquivo.startsWith(pastaDaConsulta) || arquivo.equals(pastaDaConsulta)) {
-			throw new IOException("caminho fora da pasta da consulta");
-		}
-		Files.deleteIfExists(arquivo);
-	}
-
-	private void removerPastaVazia(UUID consultaId) {
-		Path pasta = sink.dir().toAbsolutePath().normalize().resolve(consultaId.toString());
-		try {
-			Files.deleteIfExists(pasta);
-		}
-		catch (DirectoryNotEmptyException e) {
-			log.warn("Transcrição: a pasta de áudio da consulta {} ainda tem arquivos que o sistema não registrou", consultaId);
-		}
-		catch (IOException e) {
-			log.warn("Transcrição: não foi possível remover a pasta de áudio da consulta {} ({})", consultaId, e.getClass().getSimpleName());
-		}
 	}
 
 	// --- leitura e validação da mensagem do worker (contrato em docs/plan.md) ---

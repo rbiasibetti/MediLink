@@ -1,7 +1,9 @@
 """Processa um job: transcreve cada fonte existente, junta as falas e monta o resultado."""
+import io
 import logging
 from pathlib import Path
 
+from .cifra import ErroDeCifra, ler_audio
 from .config import Config
 from .mensagens import Job, JobInvalido, caminho_seguro, resultado_json
 from .unir import unir
@@ -17,8 +19,9 @@ def processar(job: Job, transcritor, cfg: Config) -> str:
             arquivo = caminho_seguro(cfg.pasta_audio, f.arquivo)
             if not arquivo.is_file():
                 raise FileNotFoundError("arquivo de áudio ausente")
-            t = transcritor.transcrever(arquivo, job.idioma)
-        except (JobInvalido, OSError, RuntimeError, ValueError) as e:
+            audio = ler_audio(arquivo, cfg.chaves, cfg.exigir_audio_cifrado)  # claro só em memória
+            t = transcritor.transcrever(io.BytesIO(audio), job.idioma)
+        except (JobInvalido, ErroDeCifra, OSError, RuntimeError, ValueError) as e:
             ignoradas += 1
             log.warning("job %s: fonte %s ignorada (%s)", job.job_id, f.audio_id, type(e).__name__)  # nunca a mensagem
             continue

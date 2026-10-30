@@ -29,7 +29,7 @@ Angular (IFrame External API) ──► Spring Boot (agenda, CPF, JWT, aceite, t
 | **CPF** | Guardado só como **HMAC-SHA256** (chave `medilink.cpf.hmac-key`), comparação em tempo constante | CPF tem 11 dígitos: hash simples (SHA-256) é reversível por força bruta; o HMAC com segredo do servidor evita isso. O sistema nunca precisa exibir o CPF de volta. |
 | Validação de CPF | Dígitos verificadores na criação; resposta única e genérica na validação | Evita enumeração; limite de tentativas em T06. |
 | Autenticação do médico | HTTP stateless; identidade = e-mail do `Medico`. Mecanismo de login definido em decisão aberta; em dev, usuário em memória. | O plano não especifica IdP do médico. |
-| Auditoria | `AuditLog` gravado a cada criação/acesso a dado sensível | T14 amplia a cobertura. |
+| Auditoria | `AuditLog` gravado a cada criação/acesso a dado sensível | T14: leitura da transcrição e acessos negados auditados; trilha só de inserção. |
 
 ## Jitsi (T01/T02)
 
@@ -96,7 +96,7 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 **Peças (todas verificadas ponta a ponta com Jitsi real, ver abaixo):**
 - **Sink** (`backend/.../sink`, Spring WebSocket): `GET /api/audio-sink/{meetingId}?sala={roomName}`. Handshake exige `Authorization: Bearer {SINK_TOKEN}` (comparação em tempo constante); sem o token certo, 401. Responde `pong` a cada `ping` (o JVB derruba a conexão se não houver resposta).
 - **Portão do consentimento no próprio sink:** a cada quadro (cache de 1 s) consulta `Consulta.capturaAutorizada()` (consulta em andamento **e** consentimento vigente). Sem isso, descarta o quadro e não cria arquivo, **não importa quem pediu a exportação**. Retirar o consentimento fecha os arquivos em até 1 s.
-- **Gravação:** `OggOpusWriter` (RFC 7845, CRC do Ogg; ffmpeg e faster-whisper leem direto) em `${medilink.sink.dir}/{consultaId}/{tag}-{epochMs}.opus`, permissões `600` (pasta `700`). Lacunas na linha do tempo (silêncio/DTX, perda) viram quadros de silêncio (até 10 min), para os arquivos das fontes ficarem alinhados; duplicados e fora de ordem são ignorados. O banco guarda só o registro (`audio_transitorio`: consulta, fonte, `endpointId`, arquivo, status, amostras); o áudio nunca vai para o banco.
+- **Gravação:** `OggOpusWriter` (RFC 7845, CRC do Ogg; ffmpeg e faster-whisper leem direto) em `${medilink.sink.dir}/{consultaId}/{tag}-{epochMs}.opus.enc` (**cifrado desde a T14**, formato MLA1 abaixo), permissões `600` (pasta `700`). Lacunas na linha do tempo (silêncio/DTX, perda) viram quadros de silêncio (até 10 min), para os arquivos das fontes ficarem alinhados; duplicados e fora de ordem são ignorados. O banco guarda só o registro (`audio_transitorio`: consulta, fonte, `endpointId`, arquivo, status, amostras); o áudio nunca vai para o banco.
 - **Módulo Prosody `mod_medilink_transcription`** (`infra/jitsi/prosody-plugins`): marca toda sala com `asyncTranscription=true` e `transcription.urlParams.sala=<roomName>`. Sem ele o Jicofo nunca liga a exportação (a versão aberta não tem quem defina esse metadado) e o sink não saberia a qual consulta o áudio pertence (o JVB só manda o `meeting_id`).
 - **Jicofo:** `custom-jicofo.conf` (gerado do template pelo `dev.sh up`) com `jicofo.transcription.url-template` e o cabeçalho `Authorization`. A URL é a do backend visto de dentro do container (`host.containers.internal` no podman).
 - **Gatilho:** o `JitsiRoom` do médico chama `setSubtitles(true,false)` enquanto `capturaAutorizada` for verdadeiro e `setSubtitles(false,false)` quando deixar de ser. Só o JWT do médico tem `features.transcription=true`.
@@ -105,7 +105,7 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 - O **gatilho é do cliente do médico**. Se a aba dele cair antes de pedir, não há captura (e a perda é silenciosa). O sink já garante que nada é gravado sem consentimento; o que falta é garantir que algo **seja** gravado. Endurecimento recomendado: o próprio Prosody (ou o backend, via módulo) ligar `recording.isTranscribingEnabled` a partir do estado do consentimento, sem depender do navegador.
 - **Quem é quem:** os arquivos vêm por `tag` (`{endpointId}-a0`); o `endpointId` fica no banco, mas ainda não se sabe qual é o médico e qual é o paciente. A T12 precisa mapear (o cliente conhece o próprio `endpointId` no evento `videoConferenceJoined`).
 - **Tempo:** os timestamps vêm do JVB, não do relógio de parede; o início de cada arquivo é o instante em que abriu (no nome) e vale como âncora para alinhar as fontes na T12.
-- **Produção:** `ws://` só em dev. Em produção o sink precisa de `wss://` (TLS até o backend), `SINK_TOKEN` forte em cofre, a pasta de áudio em disco cifrado (T14) e limite de tamanho por arquivo. Um sink por instância do backend; com várias, o `url-template` deve ir para um balanceador (T15).
+- **Produção:** `ws://` só em dev. Em produção o sink precisa de `wss://` (TLS até o backend), `SINK_TOKEN` forte em cofre, limite de tamanho por arquivo (o arquivo já é cifrado pela aplicação, T14; disco cifrado é camada extra). Um sink por instância do backend; com várias, o `url-template` deve ir para um balanceador (T15).
 - Um dia de captura é pequeno (~4 kB/s por fonte). O áudio é apagado depois de a transcrição ser gravada (T13, abaixo).
 
 **Achado de passagem (corrigido):** a opção `prejoinPageEnabled` não existe mais no Jitsi desta versão e é ignorada em silêncio; o participante ficava parado na tela de pré-entrada. A opção atual é `prejoinConfig.enabled`; corrigida no `JitsiRoom` e no `custom-config.js`.
@@ -117,9 +117,9 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 | Condição | Estado |
 | --- | --- |
 | Certificado válido e HTTPS forçado em produção (hoje: autoassinado em dev) | Pendente (produção) |
-| Tráfego interno cifrado: JVB → sink, fila, worker, SQL Server (`encrypt=true` e `trustServerCertificate=false`; hoje o dev usa `true`) | Pendente (T11 a T14) |
-| Criptografia em repouso: áudio temporário, transcrição, backups (TDE ou criptografia de coluna) | Pendente (T14) |
-| Acesso por papel e auditoria de leitura de áudio, CPF e transcrição; descarte do áudio após gravar a transcrição | Parcial: auditoria básica pronta; descarte feito na T13; leitura da transcrição já é auditada (`TRANSCRICAO_LIDA`); falta o restante da T14 |
+| Tráfego interno cifrado: JVB → sink, fila, worker, SQL Server (`encrypt=true` e `trustServerCertificate=false`; hoje o dev usa `true`) | **Imposto na subida em `prod`** (T14: `ExigenciasDeProducao` recusa iniciar sem TLS verificado no banco, HTTPS/WSS e fila em SSL); **configurado, ainda não exercitado** com certificados de verdade (dev segue em texto puro) |
+| Criptografia em repouso: áudio temporário, transcrição, backups (TDE ou criptografia de coluna) | **Áudio e transcrição: feito na aplicação (T14, AES-256-GCM, verificado)**. Backups e disco: da infraestrutura (TDE exige SQL Server Standard/Enterprise; a Express do desenvolvimento não tem) |
+| Acesso por papel e auditoria de leitura de áudio, CPF e transcrição; descarte do áudio após gravar a transcrição | **Feito (T13/T14)**: leitura da transcrição e tentativas negadas auditadas; trilha só de inserção no banco; o CPF nunca é lido (só HMAC) e o áudio só é lido pelo worker. Falta auditar o login do médico (provisório) |
 | Base legal, Relatório de Impacto, registro das operações e plano de incidente documentados | Pendente (DPO/jurídico) |
 | Termo de consentimento fiel ao tratamento real (já diz: só áudio, transcrição, descarte do áudio, sem terceiros) | Minuta pronta; validar com jurídico |
 
@@ -162,7 +162,7 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 
 ```json
 {"versao":1,"jobId":"…","consultaId":"…","idioma":"pt","encerradaEm":"2026-10-29T12:30:00Z",
- "fontes":[{"audioId":"…","arquivo":"{consultaId}/{tag}-{epochMs}.opus","endpointId":"7bc45eb8",
+ "fontes":[{"audioId":"…","arquivo":"{consultaId}/{tag}-{epochMs}.opus.enc","endpointId":"7bc45eb8",
             "papel":"MEDICO|PACIENTE|DESCONHECIDO","iniciadoEm":"2026-10-29T12:00:03.100Z"}]}
 ```
 
@@ -183,7 +183,7 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 **Versões fixadas** (`worker/requirements.txt`): `faster-whisper==1.2.1`, `confluent-kafka==2.16.1` e **`av==16.1.0`**. O faster-whisper declara só `av>=11`, mas chama `av.open(metadata_errors=…)`, removido no PyAV 17+; sem o pin o `pip` instala o 19 e a transcrição quebra.
 
 **Fora de escopo da T12 / limites.**
-- Quem consome o resultado e grava a `Transcricao` é a **T13** (seção abaixo). O texto continua no tópico depois de gravado (retenção padrão do broker): o tópico precisa de controle de acesso, cifragem e retenção curta (T14).
+- Quem consome o resultado e grava a `Transcricao` é a **T13** (seção abaixo). O texto continua no tópico depois de gravado, até a retenção do broker (24 h por padrão desde a T14); cifragem e ACL do tópico são do broker (TLS configurado na T14).
 - O worker roda no host (venv); falta empacotar em container e escalar (T15).
 - O sink e o worker compartilham a pasta de áudio (`MEDILINK_SINK_DIR`); em produção isso exige volume compartilhado cifrado.
 - O texto não passa por revisão: vocabulário médico (nomes de remédios, termos técnicos) pode ser transcrito errado; avaliar o modelo e um glossário é decisão em aberto.
@@ -208,11 +208,49 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 **Leitura.** `GET /api/consultas/{id}/transcricao` só para o médico dono (consulta de outro médico é `404`, como em todo o resto). Cada leitura bem-sucedida é auditada com o ator e a consulta. O paciente não lê pela API; o acesso do titular aos próprios dados (LGPD art. 18) é um processo à parte, a definir com o jurídico.
 
 **Limites / o que a T13 não faz.**
-- O **áudio é apagado do sistema de arquivos comum** (`unlink`); não há sobrescrita. A proteção real do que já foi gravado vem da cifragem em repouso (T14): apagar a chave torna o resto ilegível, apagar o arquivo em disco comum não garante isso.
-- O **texto permanece no tópico de resultados** pela retenção do broker. Definir retenção curta ou compactação e controle de acesso é T14.
-- Um job `FALHA_NO_WORKER` ou `FALHA_NO_ENVIO` **não é reprocessado sozinho**; falta uma rotina ou comando de reenvio (o áudio fica no disco até alguém tratar). Também não há expurgo do áudio de jobs falhos: política de retenção (T14).
+- O **áudio é apagado com `unlink`**, sem sobrescrita. Como o arquivo já é cifrado em repouso (T14), o que restar em blocos livres do disco é ilegível sem a chave mestra.
+- O **texto permanece no tópico de resultados** até a retenção do broker (24 h por padrão, T14). Não é cifrado pela aplicação nesse trânsito: depende de TLS e disco cifrado do broker e de ACL.
+- Um job `FALHA_NO_WORKER` ou `FALHA_NO_ENVIO` **não é reprocessado sozinho**; falta uma rotina ou comando de reenvio. O áudio dele não fica para sempre: a retenção (T14) o apaga depois de 7 dias e o job vira `EXPIRADO`.
 - Uma única instância de consumidor por grupo; para escalar o backend, o tópico precisa de várias partições (T15).
 - O worker, ao carregar o modelo, **consulta o huggingface.co** (verifica a revisão). Não envia dado de paciente, mas é saída para a internet: em produção, definir `HF_HUB_OFFLINE=1` com o modelo já baixado.
+
+## Compliance: cifragem, auditoria e retenção (T14)
+
+**Cifragem em repouso (na aplicação, AES-256-GCM).** Duas chaves de dados saem da chave mestra (`MEDILINK_DATA_KEY`, 32 bytes em Base64, obrigatória, fora do git) por HKDF-SHA256: a do texto e, para cada arquivo de áudio, uma própria (sal aleatório no cabeçalho). Assim o vazamento de uma não entrega a outra e nenhum par (chave, nonce) se repete.
+- *Transcrição:* as colunas `transcricao.texto` e `segmentos` guardam `enc:<idDaChave>:<base64>` (conversor JPA); um dump ou backup do banco não mostra uma palavra da consulta. O id da chave é dado autenticado. Lê-se em claro só pela aplicação.
+- *Áudio:* o sink grava `…opus.enc` no formato **MLA1**: cabeçalho (`MLA1`, id da chave, sal, tamanho do bloco) e blocos de 16 KiB `compr | cifrado+tag`, nonce = índice do bloco, cabeçalho autenticado (bloco trocado de lugar, cabeçalho de outro arquivo ou arquivo cortado no meio de um bloco **não decifra**). O worker (Python, `cryptography`) decifra **só em memória** e entrega ao Whisper; por padrão **recusa áudio sem cifra** (`MEDILINK_AUDIO_CIFRADO_OBRIGATORIO=0` desliga, só para arquivos antigos). Nunca há áudio claro no disco.
+- *Rotação:* nova chave em `MEDILINK_DATA_KEY` com novo `MEDILINK_DATA_KEY_ID`; a antiga vai em `medilink.crypto.chaves-anteriores.<id>` (backend) e `MEDILINK_DATA_KEYS_ANTERIORES="id:base64"` (worker) enquanto houver dado com ela. O que for gravado dali em diante usa a nova. **Falta uma rotina que recifre o histórico** (`cifradoComChaveAtiva` já permite identificar o que ficou para trás).
+- *Base antiga:* `medilink.crypto.aceitar-texto-legado=true` lê como texto puro o que não tem o prefixo `enc:` (só no perfil `dev`; em `prod` a subida é recusada se estiver ligado).
+- *Quem guarda a chave:* o mesmo segredo está no backend e no worker. Em produção, cofre (Vault/KMS) e acesso por serviço; **perder a chave torna as transcrições ilegíveis** e nenhum backup do banco as recupera sem ela.
+- *Compatibilidade Java ↔ Python* é testada nas duas direções com arquivos reais (`backend/src/test/resources/cifra/`, `worker/tests/fixtures/`).
+- *O que a aplicação NÃO cifra:* nome do paciente, datas e metadados (`agendamento`, `consulta`, `audit_log`) e o texto em trânsito na fila. Cobrir isso é TDE/disco cifrado do banco (a Express do dev não tem TDE) e TLS na fila. O nome do paciente é dado pessoal e está em claro: item aberto abaixo.
+
+**Auditoria.** `TRANSCRICAO_LIDA` (leitura), `TRANSCRICAO_ACESSO_NEGADO` (consulta de outro médico ou inexistente; gravado em transação própria, então sobrevive ao `404`) e os eventos de gravação, descarte e expiração. O CPF nunca é lido (só HMAC) e o áudio só é lido pelo worker, que não escreve no banco; por isso não há "leitura de CPF/áudio" a auditar além do enfileiramento. A tabela `audit_log` é **somente de inserção** no SQL Server (gatilho `INSTEAD OF UPDATE, DELETE`, migração V7): a aplicação e qualquer usuário comum do banco não reescrevem o histórico. Quem tem DDL pode remover o gatilho (deixa rastro no log do SQL Server). A retenção da auditoria em si é decisão do jurídico e se faz por procedimento administrativo.
+
+**Retenção** (`medilink.retencao.*`, rotina de hora em hora, cada regra idempotente e isolada):
+
+| Regra | Padrão | Efeito |
+| --- | --- | --- |
+| `tentativa-cpf` | 24 h | apaga as tentativas falhas de CPF (só servem à janela de 15 min do bloqueio) |
+| `audio-maximo` | 7 dias | apaga o áudio ainda existente, **qualquer que seja o estado do job**; o job que dependia dele vira `EXPIRADO` (`410` na API) |
+| `transcricao` | `0s` = guardar | se houver prazo, apaga a transcrição vencida (`TRANSCRICAO_EXPIRADA`; `410` na API) |
+| `retencao-dos-topicos` | 24 h | `retention.ms` dos dois tópicos da fila (aplicado também a tópicos já existentes na subida) |
+
+Os prazos são **pontos de partida técnicos**. O prazo da transcrição depende de ela ser parte do prontuário (prazos de guarda do prontuário são longos): decidir com o jurídico/DPO antes de produção.
+
+**TLS interno: o que é imposto e o que é só configuração.**
+- *Imposto (testado):* no perfil `prod` a aplicação **não inicia** sem `encrypt=true` e sem `trustServerCertificate=true` no banco, `server.ssl.enabled=true` (HTTPS/WSS, inclusive o sink) e `spring.kafka.security.protocol` SSL/SASL_SSL, nem com `aceitar-texto-legado` ligado (`ExigenciasDeProducao`). As mensagens citam só nomes de propriedades.
+- *Configurado, **não exercitado** (sem certificados reais aqui):* `application-prod.properties` (keystore do servidor, truststore do Kafka), o `url-template` do Jicofo em `wss://` com a CA no truststore do Jicofo, e o worker (`MEDILINK_KAFKA_SECURITY_PROTOCOL=SSL` + `MEDILINK_KAFKA_CA`, testado só na montagem dos parâmetros). Dev continua em texto puro.
+
+**Verificação.** Backend 163 testes (SQL Server local, Redpanda real): cifra (11), retenção (7), auditoria, tópicos com retenção no broker de verdade, exigências de produção. Worker 39. Ponta a ponta com Jitsi real (`verify_t11.py`: os arquivos no disco começam por `MLA1`, não têm `OggS`/`OpusHead` e decifram para Ogg Opus válido; `verify_t13.py` 14/14 com o worker lendo o áudio cifrado). Não verificado: TLS real, chave em cofre, backup/restauração com a chave, rotação em dados existentes.
+
+**Limites / pendências da T14.**
+- Nome do paciente e metadados em claro (ver acima); backups e TDE são da infraestrutura.
+- Sem rotina que recifre o histórico depois de rotacionar a chave.
+- A chave mestra única serve ao backend e ao worker; separar por serviço (e usar KMS com envelope) é o passo seguinte.
+- O login do médico (Basic provisório) não é auditado; entra com o IdP definitivo.
+- Nenhum controle de acesso por papel além de médico dono; um perfil administrativo/DPO para consultar a trilha não existe (a leitura da `audit_log` é por SQL).
+- O ajuste de retenção dos tópicos é aplicado na subida do backend; se o broker estiver fora nessa hora, só avisa.
 
 ## Contratos de API
 
@@ -230,7 +268,7 @@ A barra de ferramentas é: microfone, câmera, supressão de ruído, definiçõe
 | POST | `/api/consultas/{id}/encerrar` | Médico encerra a consulta em andamento (idempotente) e cria o job de transcrição | T10/T12 |
 | POST | `/api/consultas/{id}/participante` | O cliente informa o próprio endpoint do Jitsi (médico autenticado; paciente com o token de entrada) | T12 |
 | GET | `/api/me` | Nome e e-mail do médico autenticado (valida o login) | T10 |
-| GET | `/api/consultas/{id}/transcricao` | Transcrição da consulta (só o médico dono): `200` com falantes e tempos; `202` enquanto processa; `409` se a consulta está aberta ou a transcrição falhou; `404` se a consulta não é dele ou não teve áudio | T13 |
+| GET | `/api/consultas/{id}/transcricao` | Transcrição da consulta (só o médico dono): `200` com falantes e tempos; `202` enquanto processa; `409` se a consulta está aberta ou a transcrição falhou; `404` se a consulta não é dele ou não teve áudio; `410` se o áudio ou a transcrição expiraram pela retenção | T13/T14 |
 
 **JWT do Jitsi:** médico com `moderator=true`; paciente sem moderação, emitido só após o CPF (quando ativo). Claims amarram `agendamentoId`, `medicoId` e o paciente. Sala de espera = lobby do Jitsi.
 

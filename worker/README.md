@@ -39,7 +39,8 @@ Verificação ponta a ponta com fala em português pelo Jitsi real: [`infra/jits
 
 - **Entrega pelo menos uma vez.** A mensagem do job só é confirmada depois de o resultado ser entregue ao broker; se o worker cair no meio, o job é reprocessado. O mesmo `jobId` repetido é ignorado.
 - **Mensagem fora do contrato** é descartada sem travar a fila. **Falha inesperada** vira um resultado `FALHA` (só o tipo do erro) e o áudio é mantido.
-- **O texto da consulta nunca vai para log.** O resultado carrega o texto (dado sensível de saúde): o tópico precisa de controle de acesso e cifragem (T14).
+- **O texto da consulta nunca vai para log.** O resultado carrega o texto (dado sensível de saúde): o tópico tem retenção curta (24 h) e precisa de TLS e ACL no broker.
+- **Áudio cifrado (T14):** o sink grava `.opus.enc` (AES-256-GCM); o worker precisa de `MEDILINK_DATA_KEY` (a mesma do backend; `MEDILINK_DATA_KEY_ID`, `MEDILINK_DATA_KEYS_ANTERIORES` para rotação), decifra só em memória e recusa áudio sem cifra (`MEDILINK_AUDIO_CIFRADO_OBRIGATORIO=0` desliga). Para TLS até o broker: `MEDILINK_KAFKA_SECURITY_PROTOCOL=SSL` e `MEDILINK_KAFKA_CA`. Com o modelo já baixado, `HF_HUB_OFFLINE=1` evita qualquer acesso à internet.
 - **Caminho do arquivo validado:** sem caminho absoluto, `..` nem link simbólico que saia da pasta do sink.
 - **Desempenho medido:** ≈ 2× o tempo real por fonte em 8 núcleos de CPU (22 s para 45 s de áudio).
 

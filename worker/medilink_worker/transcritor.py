@@ -1,6 +1,7 @@
 """Transcrição de um arquivo de áudio com faster-whisper (modelo turbo, CPU, português, VAD)."""
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 from .config import Config
 
@@ -27,9 +28,9 @@ class Transcritor:
         self.modelo = WhisperModel(cfg.modelo, device=cfg.dispositivo, compute_type=cfg.precisao,
                                    download_root=str(cfg.pasta_modelos))
 
-    def transcrever(self, arquivo: Path, idioma: str | None = None) -> Transcricao:
+    def transcrever(self, audio: BinaryIO | Path, idioma: str | None = None) -> Transcricao:
         segmentos, info = self.modelo.transcribe(
-            str(arquivo),
+            str(audio) if isinstance(audio, Path) else audio,
             language=idioma or self.cfg.idioma,   # fixo em pt: evita detecção errada em trecho curto
             vad_filter=True,                       # pula trechos sem fala (economiza CPU e evita alucinação)
             vad_parameters={"min_silence_duration_ms": 500},

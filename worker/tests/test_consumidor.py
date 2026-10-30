@@ -33,7 +33,7 @@ class Falso:
 def _novo(tmp_path, transcritor, produtor):
     # Sem abrir conexão com o Kafka: só a lógica de tratar uma mensagem.
     c = object.__new__(Consumidor)
-    c.cfg = Config(pasta_audio=tmp_path)
+    c.cfg = Config(pasta_audio=tmp_path, exigir_audio_cifrado=False)
     c.transcritor, c.produtor = transcritor, produtor
     from collections import OrderedDict
     c.vistos, c.parar = OrderedDict(), False

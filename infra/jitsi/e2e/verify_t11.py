@@ -8,7 +8,8 @@ Cenário B (sem consentimento): idem, mas o paciente não consente. Esperado: ne
 Pré-requisitos: Jitsi no ar (dev.sh up), backend em dev em :8090 (com MEDILINK_SINK_TOKEN), porta 4200 livre
 (pare o ng serve) e Chrome. O Chrome de teste usa perfil temporário e --ignore-certificate-errors só para localhost.
 
-Uso: verify_t11.py <usuario:senha-do-medico>
+Uso: MEDILINK_DATA_KEY=<a do backend> <python do venv do worker> verify_t11.py <usuario:senha-do-medico>
+O worker de transcrição deve estar PARADO (senão ele consome e apaga os arquivos antes da conferência).
 """
 import base64
 import functools
@@ -74,9 +75,19 @@ def crc_ogg(dados):
     return c
 
 
+def _claro(dados):
+    """Desde a T14 o sink grava o áudio cifrado (MLA1). Confere que nada legível sobrou no disco e decifra com a chave do
+    ambiente (MEDILINK_DATA_KEY, a mesma do backend). Precisa do pacote `cryptography` (use o Python do venv do worker)."""
+    assert dados[:4] == b"MLA1", "o arquivo de áudio no disco não está cifrado"
+    assert b"OggS" not in dados and b"OpusHead" not in dados, "há áudio legível no arquivo cifrado"
+    sys.path.insert(0, str(AQUI.parent.parent.parent / "worker"))
+    from medilink_worker.cifra import Chaves, decifrar_audio  # noqa: E402
+    return decifrar_audio(dados, Chaves.de_ambiente(os.environ))
+
+
 def ler_ogg(caminho):
     """Retorna dict com paginas, pacotes_audio, crc_ok, bos/eos e duração em segundos (granule final - pré-atraso)."""
-    d = Path(caminho).read_bytes()
+    d = _claro(Path(caminho).read_bytes())
     pos, paginas, pacotes, crc_ok, seqs = 0, [], [], True, []
     atual = b""
     while pos < len(d):
@@ -155,7 +166,7 @@ def cenario(auth, nome, consentir):
         shutil.rmtree(pasta_tmp, ignore_errors=True)
     time.sleep(5)  # o JVB fecha o exportador e o sink fecha os arquivos
     pasta = PASTA_AUDIO / consulta
-    arquivos = sorted(pasta.glob("*.opus")) if pasta.exists() else []
+    arquivos = sorted(pasta.glob("*.opus.enc")) if pasta.exists() else []
     _, fim = api(f"/api/consultas/{consulta}", None, auth, "GET")
     inicio_ms = datetime.fromisoformat(fim["inicioEm"].replace("Z", "+00:00")).timestamp() * 1000
     return arquivos, inicio_ms, consulta
@@ -182,7 +193,7 @@ def main():
                      info["crc_ok"] and info["seq_ok"] and info["head"] and info["tags"] and info["eos"], str(info))
             conferir(f"{arq.name}: tem áudio ({info['audio']} pacotes, {info['duracao']:.1f} s)", info["audio"] > 200 and info["duracao"] > 8)
             # O nome traz o instante em que o arquivo foi aberto = primeiro quadro autorizado.
-            aberto_ms = int(arq.stem.rsplit("-", 1)[1])
+            aberto_ms = int(arq.name.removesuffix(".opus.enc").rsplit("-", 1)[1])
             conferir(f"{arq.name}: nada antes do aceite (aberto {aberto_ms - inicio_aceite_ms:+.0f} ms depois do aceite)",
                      aberto_ms >= inicio_aceite_ms - 50)
             gravado = arq.stat().st_mtime - aberto_ms / 1000.0

@@ -18,5 +18,7 @@ public record TranscricaoProperties(
 		/** Quanto esperar um arquivo de áudio ainda "gravando" depois do fim da consulta antes de enviá-lo assim mesmo. */
 		@DefaultValue("10m") Duration esperaMaximaDoAudio,
 		@DefaultValue("20") int maxTentativas,
-		@DefaultValue("10s") Duration timeoutDeEnvio) {
+		@DefaultValue("10s") Duration timeoutDeEnvio,
+		/** Quanto o broker guarda as mensagens dos dois tópicos (T14): cobre uma queda do consumidor, não mais que isso. */
+		@DefaultValue("24h") Duration retencaoDosTopicos) {
 }

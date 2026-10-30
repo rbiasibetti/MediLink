@@ -1,5 +1,6 @@
 package br.com.medilink.sink;
 
+import br.com.medilink.crypto.Cifrador;
 import br.com.medilink.domain.AudioStatus;
 import br.com.medilink.domain.Medico;
 import br.com.medilink.repository.AudioTransitorioRepository;
@@ -57,6 +58,7 @@ class AudioSinkIntegracaoTest {
 	@Autowired MedicoRepository medicos;
 	@Autowired AudioTransitorioRepository audios;
 	@Autowired AuditLogRepository auditoria;
+	@Autowired Cifrador cifrador;
 	@Value("${medilink.sink.dir}") Path pasta;
 
 	private String emailMedico;
@@ -156,6 +158,14 @@ class AudioSinkIntegracaoTest {
 		ws.sendText(texto, true).join();
 	}
 
+	/** O arquivo no disco é sempre cifrado (T14); aqui o teste o decifra para conferir o Ogg. */
+	private byte[] claro(Path arquivo) throws Exception {
+		byte[] bruto = Files.readAllBytes(arquivo);
+		assertThat(new String(bruto, 0, 4, java.nio.charset.StandardCharsets.ISO_8859_1)).isEqualTo("MLA1"); // nada de áudio claro no disco
+		assertThat(new String(bruto, java.nio.charset.StandardCharsets.ISO_8859_1)).doesNotContain("OggS").doesNotContain("OpusHead");
+		return cifrador.decifrarAudio(new java.io.ByteArrayInputStream(bruto));
+	}
+
 	private List<Path> arquivos(Consulta c) throws Exception {
 		Path dir = pasta.resolve(c.id());
 		if (!Files.exists(dir)) {
@@ -228,11 +238,11 @@ class AudioSinkIntegracaoTest {
 			assertThat(r.getFinalizadoEm()).isNotNull();
 			Path arq = pasta.resolve(r.getArquivo());
 			assertThat(arq).exists().startsWith(pasta);
-			assertThat(OggLeitor.pacotesDeAudio(Files.readAllBytes(arq))).hasSize(50);
+			assertThat(OggLeitor.pacotesDeAudio(claro(arq))).hasSize(50);
 		});
 		// O conteúdo de cada fonte é o dela (não se misturam).
 		var medico = registros.stream().filter(r -> r.getFonte().equals("medico-a0")).findFirst().orElseThrow();
-		assertThat(OggLeitor.pacotesDeAudio(Files.readAllBytes(pasta.resolve(medico.getArquivo()))).get(3)).isEqualTo(pacote(3));
+		assertThat(OggLeitor.pacotesDeAudio(claro(pasta.resolve(medico.getArquivo()))).get(3)).isEqualTo(pacote(3));
 		assertThat(auditoria.findByRecursoOrderByMomento("consulta/" + c.id())).extracting("acao").contains("CAPTURA_ABERTA", "CAPTURA_FECHADA");
 	}
 
@@ -268,7 +278,7 @@ class AudioSinkIntegracaoTest {
 
 		await().atMost(10, TimeUnit.SECONDS).until(() -> arquivos(c).size() == 1
 				&& audios.findByConsultaIdOrderByIniciadoEm(UUID.fromString(c.id())).get(0).getStatus() == AudioStatus.COMPLETO);
-		List<byte[]> pacotes = OggLeitor.pacotesDeAudio(Files.readAllBytes(arquivos(c).get(0)));
+		List<byte[]> pacotes = OggLeitor.pacotesDeAudio(claro(arquivos(c).get(0)));
 		assertThat(pacotes).hasSize(5 + 10 + 1);
 		assertThat(pacotes.get(4)).isEqualTo(pacote(4));
 		assertThat(pacotes.get(5)).containsExactly((byte) 0xFC, (byte) 0xFF, (byte) 0xFE); // silêncio
@@ -334,7 +344,7 @@ class AudioSinkIntegracaoTest {
 		assertThat(registros).hasSize(1);
 		assertThat(registros.get(0).getStatus()).isEqualTo(AudioStatus.COMPLETO);
 		assertThat(registros.get(0).getAmostras()).isEqualTo(10L * 960);
-		assertThat(OggLeitor.pacotesDeAudio(Files.readAllBytes(pasta.resolve(registros.get(0).getArquivo())))).hasSize(10);
+		assertThat(OggLeitor.pacotesDeAudio(claro(pasta.resolve(registros.get(0).getArquivo())))).hasSize(10);
 		ws.sendClose(WebSocket.NORMAL_CLOSURE, "fim").join();
 	}
 
@@ -366,7 +376,7 @@ class AudioSinkIntegracaoTest {
 		ws.sendClose(WebSocket.NORMAL_CLOSURE, "fim").join();
 		await().atMost(10, TimeUnit.SECONDS).until(() -> arquivos(c).size() == 1);
 
-		assertThat(arquivos(c).get(0).getFileName().toString()).startsWith(".._.._etc_passwd-").endsWith(".opus");
+		assertThat(arquivos(c).get(0).getFileName().toString()).startsWith(".._.._etc_passwd-").endsWith(".opus.enc");
 		assertThat(arquivos(c).get(0).normalize().startsWith(pasta.resolve(c.id()))).isTrue();
 		assertThat(AudioSinkHandler.nomeSeguro("")).isEqualTo("fonte");
 	}

@@ -1,5 +1,6 @@
 package br.com.medilink.sink;
 
+import br.com.medilink.crypto.Cifrador;
 import br.com.medilink.domain.AudioTransitorio;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +12,6 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -62,9 +62,11 @@ class AudioSinkHandler extends TextWebSocketHandler {
 	private final CapturaService captura;
 	private final SinkProperties props;
 	private final JsonMapper json;
+	private final Cifrador cifrador;
 	private final Map<String, Conexao> conexoes = new ConcurrentHashMap<>();
 
-	AudioSinkHandler(CapturaService captura, SinkProperties props, JsonMapper json) {
+	AudioSinkHandler(CapturaService captura, SinkProperties props, JsonMapper json, Cifrador cifrador) {
+		this.cifrador = cifrador;
 		this.captura = captura;
 		this.props = props;
 		this.json = json;
@@ -176,15 +178,16 @@ class AudioSinkHandler extends TextWebSocketHandler {
 	private void abrirArquivo(Conexao c, FonteAudio f) throws IOException {
 		Path pasta = props.dir().resolve(c.consultaId.toString());
 		criarPasta(pasta);
-		String nome = nomeSeguro(f.tag) + "-" + System.currentTimeMillis() + ".opus";
+		String nome = nomeSeguro(f.tag) + "-" + System.currentTimeMillis() + ".opus.enc";
 		Path arquivo = pasta.resolve(nome);
-		OutputStream out = new BufferedOutputStream(Files.newOutputStream(arquivo, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE));
+		OutputStream bruto = Files.newOutputStream(arquivo, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
 		try {
 			Files.setPosixFilePermissions(arquivo, PosixFilePermissions.fromString("rw-------"));
 		}
 		catch (UnsupportedOperationException ignorado) {
 			// sistema de arquivos sem POSIX
 		}
+		OutputStream out = cifrador.cifrarAudio(bruto); // nada de áudio claro vai ao disco (T14)
 		f.writer = new OggOpusWriter(out, f.canais, (int) System.nanoTime());
 		AudioTransitorio registro = captura.abrir(c.consultaId, f.tag, f.endpointId, c.consultaId + "/" + nome);
 		f.audioId = registro.getId();

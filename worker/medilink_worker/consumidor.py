@@ -17,10 +17,10 @@ class Consumidor:
     def __init__(self, cfg: Config, transcritor):
         self.cfg, self.transcritor = cfg, transcritor
         self.consumidor = Consumer({
-            "bootstrap.servers": cfg.kafka, "group.id": cfg.grupo, "enable.auto.commit": False,
+            **cfg.kafka_base(), "group.id": cfg.grupo, "enable.auto.commit": False,
             "auto.offset.reset": "earliest", "max.poll.interval.ms": 3_600_000,  # uma consulta longa leva minutos em CPU
         })
-        self.produtor = Producer({"bootstrap.servers": cfg.kafka, "acks": "all", "enable.idempotence": True})
+        self.produtor = Producer({**cfg.kafka_base(), "acks": "all", "enable.idempotence": True})
         self.vistos: OrderedDict[str, None] = OrderedDict()   # dedup do mesmo job reenviado pelo backend
         self.parar = False
 

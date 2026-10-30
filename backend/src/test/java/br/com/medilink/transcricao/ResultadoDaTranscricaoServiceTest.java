@@ -143,12 +143,25 @@ class ResultadoDaTranscricaoServiceTest {
 	}
 
 	@Test
+	void textoSaiCifradoDoBancoEVoltaClaroPelaAplicacao() throws Exception {
+		service.processar(resultado("CONCLUIDO"));
+
+		// O que está na coluna (o que um DBA, um backup ou um dump enxergam) é cifra, sem uma palavra do texto.
+		var colunas = jdbc.queryForMap("SELECT texto, segmentos FROM transcricao WHERE consulta_id = ?", consultaId);
+		for (Object coluna : colunas.values()) {
+			assertThat((String) coluna).startsWith("enc:kt:").doesNotContain("cabeça").doesNotContain("doutora").doesNotContain("MEDICO");
+		}
+		// Pela aplicação, o mesmo registro volta em claro.
+		assertThat(transcricoes.findByConsultaId(consultaId).orElseThrow().getTexto()).contains(FALA_MEDICO);
+	}
+
+	@Test
 	void entregaRepetidaNaoDuplicaNada() throws Exception {
 		service.processar(resultado("CONCLUIDO"));
 
 		assertThat(service.processar(resultado("CONCLUIDO"))).isEqualTo(Desfecho.JA_PROCESSADA);
 
-		assertThat(transcricoes.findAll().stream().filter(t -> t.getConsulta().getId().equals(consultaId))).hasSize(1);
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM transcricao WHERE consulta_id = ?", Integer.class, consultaId)).isEqualTo(1);
 		assertThat(statusDoJob()).isEqualTo(JobStatus.CONCLUIDO);
 	}
 

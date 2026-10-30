@@ -1,5 +1,8 @@
 package br.com.medilink.repository;
 
+import br.com.medilink.crypto.CifraTextoConverter;
+import br.com.medilink.crypto.Cifrador;
+import br.com.medilink.crypto.CryptoProperties;
 import br.com.medilink.domain.Agendamento;
 import br.com.medilink.domain.AgendamentoStatus;
 import br.com.medilink.domain.AuditLog;
@@ -9,8 +12,10 @@ import br.com.medilink.domain.Medico;
 import br.com.medilink.domain.Transcricao;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
@@ -20,6 +25,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** T03: as migrações aplicam sobre o schema validado pelo Hibernate e o modelo faz round-trip. */
 @DataJpaTest
+@Import({Cifrador.class, CifraTextoConverter.class}) // a transcrição é cifrada em repouso (T14)
+@EnableConfigurationProperties(CryptoProperties.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class ModeloDadosTest {
 

@@ -9,26 +9,27 @@ from medilink_worker.transcritor import Transcricao
 
 
 class Falso:
-    """Transcritor falso: devolve falas roteirizadas por nome de arquivo."""
+    """Transcritor falso: devolve falas roteirizadas pelo nome, que o teste grava como conteúdo do arquivo."""
 
     def __init__(self, roteiro, erro_em=()):
         self.roteiro, self.erro_em, self.chamadas = roteiro, set(erro_em), []
 
     def transcrever(self, arquivo, idioma=None):
-        self.chamadas.append((arquivo.name, idioma))
-        if arquivo.name in self.erro_em:
+        nome = arquivo.read().decode()
+        self.chamadas.append((nome, idioma))
+        if nome in self.erro_em:
             raise RuntimeError("falha de decodificação com texto SECRETO da consulta")
-        return Transcricao(self.roteiro[arquivo.name], 10.0, "pt", 0.99)
+        return Transcricao(self.roteiro[nome], 10.0, "pt", 0.99)
 
 
 def _cfg(pasta):
-    return Config(pasta_audio=pasta)
+    return Config(pasta_audio=pasta, exigir_audio_cifrado=False)  # a cifra tem testes próprios (test_cifra.py)
 
 
 def _audios(pasta, *nomes):
     (pasta / "c-1").mkdir(exist_ok=True)
     for n in nomes:
-        (pasta / "c-1" / n).write_bytes(b"x")
+        (pasta / "c-1" / n).write_bytes(n.encode())
 
 
 def test_transcreve_as_duas_fontes_e_rotula_o_locutor(tmp_path):
