@@ -1,5 +1,6 @@
 package br.com.medilink.security;
 
+import br.com.medilink.admin.MedicoAdminService;
 import br.com.medilink.domain.Medico;
 import br.com.medilink.repository.MedicoRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,7 +12,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 
-/** Só no perfil "dev": um médico de exemplo com login em memória. Credenciais em application-dev.properties. */
+/** Só no perfil "dev": um médico de exemplo, com login em memória (Basic) e senha no banco (tela de login). Credenciais em application-dev.properties. */
 @Configuration
 @Profile("dev")
 class DevMedicoConfig {
@@ -23,10 +24,12 @@ class DevMedicoConfig {
 	}
 
 	@Bean
-	CommandLineRunner devMedico(MedicoRepository medicos, @Value("${medilink.dev.medico-email}") String email) {
+	CommandLineRunner devMedico(MedicoRepository medicos, MedicoAdminService admin, @Value("${medilink.dev.medico-email}") String email,
+			@Value("${medilink.dev.medico-password}") String senha) {
 		return args -> {
-			if (medicos.findByEmail(email).isEmpty()) {
-				medicos.save(new Medico("Dr(a). Exemplo", "CRM-DEV 0001", email));
+			var medico = medicos.findByEmail(email).orElseGet(() -> medicos.save(new Medico("Dr(a). Exemplo", "CRM-DEV 0001", email)));
+			if (medico.getSenhaHash() == null) { // a tela de login (T20) usa a senha do banco; o Basic de dev segue em memória
+				admin.definirSenha("sistema", medico.getId(), senha);
 			}
 		};
 	}

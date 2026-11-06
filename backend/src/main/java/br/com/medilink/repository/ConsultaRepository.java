@@ -2,6 +2,9 @@ package br.com.medilink.repository;
 
 import br.com.medilink.domain.Consulta;
 import br.com.medilink.domain.ConsultaStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.Instant;
@@ -14,4 +17,10 @@ public interface ConsultaRepository extends JpaRepository<Consulta, UUID> {
 	Optional<Consulta> findByAgendamentoId(UUID agendamentoId);
 
 	List<Consulta> findByStatusAndUltimaPresencaMedicoEmBefore(ConsultaStatus status, Instant limite);
+
+	@EntityGraph(attributePaths = "agendamento")
+	Page<Consulta> findByAgendamentoMedicoId(UUID medicoId, Pageable pagina);
+
+	@EntityGraph(attributePaths = "agendamento")
+	Page<Consulta> findByAgendamentoMedicoIdAndStatus(UUID medicoId, ConsultaStatus status, Pageable pagina);
 }

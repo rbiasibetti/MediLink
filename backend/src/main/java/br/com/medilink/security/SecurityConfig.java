@@ -2,6 +2,7 @@ package br.com.medilink.security;
 
 import br.com.medilink.admin.AdminFiltro;
 import br.com.medilink.integracao.ApiKeyFiltro;
+import br.com.medilink.medico.LoginMedicoFiltro;
 import br.com.medilink.medico.SessaoMedicoFiltro;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,17 +37,25 @@ class SecurityConfig {
 		return reg;
 	}
 
+	@Bean
+	org.springframework.boot.web.servlet.FilterRegistrationBean<LoginMedicoFiltro> loginMedicoFiltroSemRegistroGlobal(LoginMedicoFiltro filtro) {
+		var reg = new org.springframework.boot.web.servlet.FilterRegistrationBean<>(filtro);
+		reg.setEnabled(false);
+		return reg;
+	}
+
 	/**
 	 * API stateless. Rotas de paciente (/api/salas/**) são públicas e se protegem por CPF + token de sala
 	 * (T06/T07); o restante exige médico autenticado. O mecanismo de login definitivo é decisão aberta
 	 * (docs/plan.md); HTTP Basic é o provisório.
 	 */
 	@Bean
-	SecurityFilterChain filterChain(HttpSecurity http, ApiKeyFiltro apiKeyFiltro, SessaoMedicoFiltro sessaoMedicoFiltro, AdminFiltro adminFiltro) throws Exception {
+	SecurityFilterChain filterChain(HttpSecurity http, ApiKeyFiltro apiKeyFiltro, SessaoMedicoFiltro sessaoMedicoFiltro, LoginMedicoFiltro loginMedicoFiltro, AdminFiltro adminFiltro) throws Exception {
 		return http
 				.csrf(csrf -> csrf.disable())
 				.addFilterBefore(apiKeyFiltro, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
 				.addFilterBefore(sessaoMedicoFiltro, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
+				.addFilterBefore(loginMedicoFiltro, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
 				.addFilterBefore(adminFiltro, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
 				.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(a -> a
@@ -62,6 +71,8 @@ class SecurityConfig {
 						.requestMatchers("/api/admin/**").hasRole("ADMIN")
 						// Troca do link de uso único do médico pela sessão da consulta (T17).
 						.requestMatchers(HttpMethod.POST, "/api/medico/sessao").permitAll()
+						// Login do médico por e-mail e senha (T20).
+						.requestMatchers(HttpMethod.POST, "/api/medico/login").permitAll()
 						// Consentimento é do paciente: ele se identifica pelo token de entrada, no corpo.
 						.requestMatchers(HttpMethod.GET, "/api/termo-consentimento").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/consultas/*/consentimento").permitAll()

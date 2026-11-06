@@ -12,5 +12,7 @@ public interface TranscricaoJobRepository extends JpaRepository<TranscricaoJob, 
 
 	Optional<TranscricaoJob> findByConsultaId(UUID consultaId);
 
+	List<TranscricaoJob> findByConsultaIdIn(java.util.Collection<UUID> consultaIds);
+
 	List<TranscricaoJob> findByStatusOrderByCriadoEm(JobStatus status);
 }

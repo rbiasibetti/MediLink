@@ -23,4 +23,8 @@ public interface TranscricaoRepository extends JpaRepository<Transcricao, UUID> 
 	@Modifying
 	@Query("delete from Transcricao t where t.consulta.id = :consultaId")
 	int deleteByConsultaId(@Param("consultaId") UUID consultaId);
+
+	/** Quais destas consultas já têm transcrição gravada (sem decifrar o texto). */
+	@Query("select t.consulta.id from Transcricao t where t.consulta.id in :ids")
+	List<UUID> consultasComTranscricao(@Param("ids") java.util.Collection<UUID> ids);
 }

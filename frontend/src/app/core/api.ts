@@ -37,6 +37,17 @@ export interface SessaoLink {
 export interface SegmentoTranscricao { papel: string; inicioMs: number; fimMs: number; texto: string }
 export interface TranscricaoLida { consultaId: string; idioma: string; duracaoMs: number; criadaEm: string; texto: string; segmentos: SegmentoTranscricao[] }
 
+/** Resposta do login do médico (T20): `ENROLAR_TOTP` quando o administrador exigiu o TOTP e o médico ainda não o cadastrou. */
+export interface LoginMedicoResposta {
+  etapa: 'OK' | 'ENROLAR_TOTP'; token?: string; expiraEm?: string; nome?: string; segredoTotp?: string; otpauthUri?: string;
+}
+export type TranscricaoEstado = 'NAO_APLICAVEL' | 'EM_PROCESSAMENTO' | 'DISPONIVEL' | 'SEM_AUDIO' | 'FALHA' | 'EXPIRADA';
+export interface ConsultaResumo {
+  consultaId: string; agendamentoId: string; pacienteNome: string; dataHora: string; status: string;
+  inicioEm: string | null; fimEm: string | null; transcricao: TranscricaoEstado;
+}
+export interface PaginaConsultas { itens: ConsultaResumo[]; pagina: number; tamanho: number; total: number }
+
 /** Cliente da API do MediLink. As rotas de paciente são públicas; as de médico levam o Basic provisório. */
 @Injectable({ providedIn: 'root' })
 export class Api {
@@ -72,6 +83,16 @@ export class Api {
   }
 
   // ---- médico ----
+  /** Login por e-mail e senha (T20); o código do autenticador só é exigido se o administrador habilitou o TOTP. */
+  loginMedico(email: string, senha: string, codigo?: string): Observable<LoginMedicoResposta> {
+    return this.http.post<LoginMedicoResposta>('/api/medico/login', { email, senha, ...(codigo ? { codigo } : {}) });
+  }
+
+  consultas(pagina: number, status?: string): Observable<PaginaConsultas> {
+    const q = `pagina=${pagina}&tamanho=20${status ? `&status=${encodeURIComponent(status)}` : ''}`;
+    return this.http.get<PaginaConsultas>(`/api/consultas?${q}`, { headers: this.auth.headers() });
+  }
+
   eu(): Observable<{ nome: string; email: string }> {
     return this.http.get<{ nome: string; email: string }>('/api/me', { headers: this.auth.headers() });
   }

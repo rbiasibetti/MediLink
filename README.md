@@ -58,7 +58,7 @@ Plataforma de **telemedicina self-hosted** sobre o [Jitsi Meet](https://jitsi.or
 
 | Pergunta | Resposta |
 | --- | --- |
-| Quem usa? | **Médicos** (entram por link de uso único emitido pelo sistema de origem, ou pelo login provisório em desenvolvimento), **pacientes** (link único, CPF opcional, termo obrigatório), **sistemas externos** (API por API key) e **administradores** (painel com senha + TOTP). |
+| Quem usa? | **Médicos** (entram por e-mail e senha, cadastrados pelo administrador, ou por link de uso único emitido pelo sistema de origem), **pacientes** (link único, CPF opcional, termo obrigatório), **sistemas externos** (API por API key) e **administradores** (painel com senha + TOTP). |
 | O que fica guardado? | Agendamentos (nome e e-mail do paciente cifrados, CPF só como HMAC), consultas, consentimento (versão e hash do termo aceito), **transcrição cifrada** e a trilha de auditoria (somente inserção). **O áudio é apagado** assim que a transcrição é gravada. |
 | Onde roda? | No seu servidor: Jitsi (Docker/Podman), backend Spring Boot, frontend estático atrás de nginx, SQL Server, fila Kafka/Redpanda e um worker Python com `faster-whisper` em CPU (GPU possível, ⚠ não exercitado). |
 | O que é decisão sua? | Prazos de retenção, texto do termo de consentimento, base legal, provedor de identidade do médico e dimensionamento. Veja [Limitações conhecidas](#limitações-conhecidas). |
@@ -87,6 +87,7 @@ O projeto segue **SDD (Spec-Driven Development)**: especificação → plano té
 | Integração | **T17** Médico entra por link de uso único; reabertura e inatividade | Pronta |
 | Administração | **T18** Administrador (senha + TOTP), painel, keys e termo de consentimento | Pronta |
 | Integração | **T19** Webhook de devolução da transcrição | Pronta |
+| Médico | **T20** Cadastro de médicos, login por e-mail e senha (TOTP a critério do administrador) e lista das consultas | Pronta |
 | Escala | **T15** Vários JVBs, autoscaling e teste de carga (até 1.000 salas) | Mapeada, não iniciada |
 
 O estado detalhado de cada tarefa, com o que foi e o que **não** foi verificado, está em [`docs/tasks.md`](docs/tasks.md).
@@ -106,6 +107,7 @@ O estado detalhado de cada tarefa, com o que foi e o que **não** foi verificado
 | RF-09 | Integração por API key: criar, alterar, cancelar e consultar reuniões; iniciar a sala por link de uso único do médico | Feito |
 | RF-10 | Administração: painel de andamento, sistemas integrados, API keys, termo de consentimento versionado e webhooks | Feito |
 | RF-11 | Webhook de devolução da transcrição, assinado, para a URL base cadastrada + caminho do agendamento | Feito |
+| RF-12 | Médico com login próprio: o administrador o cadastra (e-mail e senha) e decide, médico a médico, se o TOTP é exigido; o médico vê as próprias consultas e lê as transcrições | Feito |
 
 Também implementado: bloqueio do acesso direto à interface do Jitsi (só carrega dentro do MediLink), restrições de sala (sem chat, compartilhamento de tela, convites etc.), supressão de ruído e qualidade de vídeo no nível 2, reabertura da consulta em até 10 minutos, encerramento por inatividade do médico e retenção configurável. Veja [`docs/plan.md`](docs/plan.md).
 
@@ -324,7 +326,7 @@ npm install        # o .npmrc usa legacy-peer-deps (bug do npm 10.8.2 com peer d
 npx ng serve       # http://localhost:4200, com proxy de /api para o backend em :8090
 ```
 
-- Médico (login provisório de desenvolvimento): `http://localhost:4200/medico`
+- Médico (e-mail e senha; em `dev`, `medico@medilink.local` / `dev-only-change-me`): `http://localhost:4200/medico`, depois `/medico/consultas`
 - Administrador: `http://localhost:4200/admin`
 - Paciente: o link gerado no agendamento (`http://localhost:4200/sala/{roomName}`)
 - Médico por link de uso único (integração): `http://localhost:4200/medico/acesso#t=…`
@@ -380,6 +382,7 @@ Propriedades que podem ser ajustadas (por arquivo de configuração externo do S
 | `medilink.transcricao.retencao-dos-topicos` | `24h` | `retention.ms` dos dois tópicos da fila |
 | `medilink.integracao.limite-por-minuto` | `120` | Requisições por API key e por minuto (por instância) |
 | `medilink.admin.sessao-ttl` / `max-falhas` / `bloqueio` | `30m` / `5` / `15m` | Sessão e bloqueio do administrador |
+| `medilink.medico-login.sessao-ttl` / `max-falhas` / `bloqueio` | `8h` / `5` / `15m` | Sessão e bloqueio do login do médico por senha |
 | `medilink.webhook.recuos` | `1m,5m,30m,2h,6h,24h` | Esperas entre as tentativas do webhook |
 | `medilink.webhook.modo-dev` | `false` | **Só desenvolvimento**: libera HTTP e endereços locais no webhook; o perfil `prod` recusa subir com ele ligado |
 
@@ -418,7 +421,7 @@ Duas constantes em `frontend/src/app/core/config.ts`, **fixadas na compilação*
 
 ## API
 
-Rotas do **médico** exigem autenticação (HTTP Basic provisório em desenvolvimento, ou a **sessão** aberta pelo link de uso único); as do **paciente** são públicas e se protegem pelo link não adivinhável, pelo CPF e pelo token de entrada.
+Rotas do **médico** exigem autenticação (a **sessão** do login por e-mail e senha, a **sessão** presa a uma consulta aberta pelo link de uso único, ou o HTTP Basic de desenvolvimento); as do **paciente** são públicas e se protegem pelo link não adivinhável, pelo CPF e pelo token de entrada.
 
 | Método | Rota | Quem | Função |
 | --- | --- | --- | --- |
@@ -426,6 +429,8 @@ Rotas do **médico** exigem autenticação (HTTP Basic provisório em desenvolvi
 | `GET` | `/api/agendamentos/{id}` | médico | Consulta o agendamento (só o dono) |
 | `POST` | `/api/agendamentos/{id}/enviar-email` | médico | Envia o link ao paciente |
 | `POST` | `/api/agendamentos/{id}/token-jitsi` | médico | JWT de moderador para a sala |
+| `POST` | `/api/medico/login` | pública | Login do médico por e-mail e senha (e código TOTP, se o administrador o exigir); devolve a sessão (8 h) |
+| `GET` | `/api/consultas?status=&pagina=&tamanho=` | médico (login) | Consultas do médico, da mais recente para a mais antiga, com a situação da transcrição de cada uma (sem o texto). A sessão por link não alcança esta rota |
 | `GET` | `/api/me` | médico | Nome e e-mail do médico autenticado |
 | `GET` | `/api/consultas/{id}` | médico | Estado da consulta e se há paciente aguardando (também é o sinal de vida do médico) |
 | `GET` | `/api/consultas/{id}/transcricao` | médico | Transcrição com falantes e tempos (`200`); `202` enquanto processa; `409` consulta aberta ou transcrição falhou; `404` de outro médico ou sem áudio; `410` expirada. Cada leitura é auditada |
@@ -487,11 +492,12 @@ Para iniciar a sala, o sistema chama `POST …/{chaveReuniao}/acesso-medico` com
 | `GET /api/admin/painel` | Contagens e estados (sem dado de paciente) e incidentes |
 | `POST /api/admin/jobs/{consultaId}/reenviar` | Recoloca na fila um job que falhou |
 | `…/administradores` | Lista, cria e desativa administradores |
+| `GET/POST /api/admin/medicos`, `PUT …/{id}`, `POST …/{id}/senha`, `…/ativar`, `…/desativar`, `…/totp/habilitar`, `…/totp/desabilitar` | Cadastro de médicos: senha inicial e redefinição, ativação e exigência de TOTP por médico (nenhuma resposta traz senha, hash nem segredo) |
 | `…/integradores`, `…/integradores/{id}/chaves`, `…/chaves/{id}/revogar`, `…/integradores/{id}/webhook` | Sistemas integrados, API keys (mostradas uma vez) e webhook |
 | `…/termos` (`POST`, `PUT /{id}`, `POST /{id}/publicar`, `DELETE /{id}`) | Versões do termo de consentimento; publicada é imutável |
 | `GET /api/admin/webhooks/entregas`, `POST …/{id}/reenviar` | Estado das entregas de webhook e reenvio |
 
-A interface fica em `/admin` (login) e `/admin/painel` (Andamento, Sistemas e keys, Termo de consentimento, Webhooks).
+A interface fica em `/admin` (login) e `/admin/painel` (Andamento, Médicos, Sistemas e keys, Termo de consentimento, Webhooks).
 
 ### Webhook de devolução
 
@@ -534,6 +540,7 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 - **Aceite no backend**: a credencial do Jitsi do paciente só é emitida depois do aceite do médico. Como a sala do Jitsi nasce aberta, esse portão fica no backend, e sem JWT ninguém entra.
 - **Interface do Jitsi não exposta**: navegação direta (`Sec-Fetch-Dest: document`) recebe 403 e só o iframe do MediLink carrega a interface; `frame-ancestors` restringe quem pode embutir. É uma camada de ocultação; **a fronteira de segurança é o JWT**.
 - **Integração por API key**: key de 256 bits só no cabeçalho e guardada como hash, com escopos, validade, revogação e limite de uso; um sistema nunca enxerga o de outro; o médico entra por **link de uso único** (token no fragmento da URL, 5 min) que vira uma sessão presa a UMA consulta, e o JWT do Jitsi nunca sai da plataforma.
+- **Login do médico**: e-mail e senha (BCrypt custo 12) com resposta de falha sempre igual, bloqueio após 5 falhas, TOTP exigido médico a médico por decisão do administrador (segredo cifrado, sem reutilizar o mesmo código), sessão própria que não vale para outras áreas e corte imediato ao desativar o médico. A lista de consultas nunca carrega o texto da transcrição.
 - **Administração**: senha (BCrypt) + TOTP com código de uso único, bloqueio por tentativas, sessão curta só em memória, painel sem nenhum dado de paciente, tudo auditado.
 - **Webhook**: destino preso à URL base cadastrada, só HTTPS com certificado e nome verificados, nenhum endereço interno (anti-SSRF, com o IP fixado na conexão), nenhum redirecionamento, corpo assinado por HMAC com carimbo de tempo e sem CPF, e-mail nem nome do paciente.
 - **Consentimento obrigatório**: toda teleconsulta é registrada, então quem não aceita o termo não chega à sala de espera nem à sala (o médico também não consegue aceitá-lo). Quem retira o consentimento no meio da consulta perde a credencial e a tela encerra a participação; o médico vê um alerta. Termo versionado, com a versão e o hash do texto gravados junto da data. O **audio sink confere o consentimento por conta própria** a cada segundo e descarta o áudio sem ele, independentemente de quem pediu a exportação.
@@ -899,7 +906,7 @@ kafka-topics.sh --bootstrap-server fila.interno.clinica.com.br:9092 --command-co
    curl --cacert ca.pem https://api.clinica.com.br:8090/actuator/health        # {"status":"UP"}
    ```
 
-> **Médico em produção.** Não existe login de médico por senha no perfil `prod` (o HTTP Basic é provisório e só tem usuário em desenvolvimento). O médico entra **pelo link de uso único** que o sistema integrado obtém em `…/acesso-medico`. A tela `/medico/agendar` (agendamento pelo próprio médico) depende desse login provisório e só serve em desenvolvimento. Em produção, agende pela API de integração.
+> **Médico em produção.** Há duas formas de entrar: (1) **e-mail e senha**, com o médico cadastrado pelo administrador em **Médicos** (seção 11), e (2) o **link de uso único** que o sistema integrado obtém em `…/acesso-medico`, preso a uma consulta. Quem tem login vê todas as próprias consultas em `/medico/consultas` e lê as transcrições; quem entra só por link vê apenas aquela consulta. O HTTP Basic é só do perfil `dev`.
 
 ### 8. Jitsi
 
@@ -1127,8 +1134,9 @@ O worker é um processo Python que consome a fila, **decifra o áudio em memóri
 
 1. **Administrador**: abra `https://app.clinica.com.br/admin`, entre com `MEDILINK_ADMIN_EMAIL` e a senha. No primeiro acesso a tela mostra o segredo do autenticador; cadastre-o (Google Authenticator, Authy, etc.) e informe o código. **Depois, remova `MEDILINK_ADMIN_EMAIL` e `MEDILINK_ADMIN_SENHA` do `backend.env`** e reinicie. Crie administradores adicionais pela API (`POST /api/admin/administradores`).
 2. **Termo de consentimento**: em **Termo de consentimento**, revise o texto com o jurídico/DPO, crie uma nova versão (rascunho), publique. Se vai usar webhook, o texto precisa informar o envio da transcrição ao sistema do cliente. Cada consentimento grava a versão e o hash do texto aceito.
-3. **Sistema integrado**: em **Sistemas e keys**, cadastre o sistema, gere a API key (escopos `agendamento:escrever`, `agendamento:ler`, `sala:iniciar`) e **copie-a agora** (não será mostrada de novo). Se o sistema recebe webhook, preencha a **URL base HTTPS** (por exemplo `https://api.cliente.com.br/hooks/medilink`), ative e copie o segredo de assinatura (também mostrado uma vez).
-4. **Primeira reunião de teste** pela API (exemplo na seção [API](#api)), usando um e-mail seu para receber o link.
+3. **Médicos**: em **Médicos**, cadastre cada médico (nome, registro profissional, e-mail, senha inicial de 12+ caracteres) e marque **Exigir TOTP** para quem deve usar o autenticador; no primeiro login do médico a tela mostra o segredo para cadastrá-lo. Passe a senha inicial por um canal seguro. Para trocar de celular use **Refazer cadastro do TOTP**; para quem esqueceu a senha, **Redefinir senha**; para quem saiu, **Desativar**.
+4. **Sistema integrado**: em **Sistemas e keys**, cadastre o sistema, gere a API key (escopos `agendamento:escrever`, `agendamento:ler`, `sala:iniciar`) e **copie-a agora** (não será mostrada de novo). Se o sistema recebe webhook, preencha a **URL base HTTPS** (por exemplo `https://api.cliente.com.br/hooks/medilink`), ative e copie o segredo de assinatura (também mostrado uma vez).
+5. **Primeira reunião de teste** pela API (exemplo na seção [API](#api)), usando um e-mail seu para receber o link.
 
 ### 12. Verificação pós-implantação
 
@@ -1290,14 +1298,14 @@ Na arquitetura de transcrição do Jitsi atual, o Jicofo só manda o JVB exporta
 O banco dos testes é **sempre o SQL Server local** (`medilink_test`); não há banco em memória.
 
 ```bash
-# backend: 246 testes (unitários e de integração: audio sink com servidor real, fila no Redpanda local, webhook com TLS real)
+# backend: 267 testes (unitários e de integração: audio sink com servidor real, fila no Redpanda local, webhook com TLS real)
 cd backend && ./run-mssql.sh test
 ./run-mssql.sh test -Dtest=ConsultaAceiteApiTest    # só uma classe
 
 # worker de transcrição: 39 testes (sem modelo e sem broker)
 cd worker && .venv/bin/python -m pytest -q
 
-# frontend: 59 testes (Vitest)
+# frontend: 69 testes (Vitest)
 cd frontend && npx ng test --watch=false
 
 # ponta a ponta com Jitsi real (pare o ng serve antes: a porta 4200 precisa estar livre)
@@ -1354,7 +1362,7 @@ As decisões e o raciocínio estão em [`docs/plan.md`](docs/plan.md). As princi
 - A transcrição custa ≈ 2× o tempo real por fonte em CPU (8 núcleos); o worker não tem container e o vocabulário médico não foi avaliado.
 - A janela de reabertura de 10 minutos **atrasa toda transcrição** em 10 minutos (ajustável).
 - O mapa de quem é médico e quem é paciente é informado pelo cliente (o papel vem da autenticação, o endpoint vem do navegador).
-- O login de médico por senha é **provisório e só existe em desenvolvimento**; em produção o médico entra pelo link do sistema integrado. O mecanismo definitivo (provedor de identidade) está em aberto.
+- O login do médico é por e-mail e senha cadastrados pelo administrador: **não há autocadastro nem recuperação de senha por e-mail** (o administrador redefine), o bloqueio por tentativas é por e-mail (use limite por IP no proxy) e a sessão de 8 h só é cortada ao desativar o médico, não ao trocar a senha. Provedor de identidade (OIDC) segue em aberto.
 - O limite de uso por API key é por instância do backend; o bloqueio do administrador por e-mail permite travar a conta por 15 minutos (use também limite por IP no proxy).
 - O token de entrada do paciente dura 10 minutos; se o aceite demorar mais, ele repete o CPF.
 - Modo `referencia` do webhook e leitura da transcrição por API key não foram implementados (decisão do jurídico).
@@ -1365,7 +1373,7 @@ A lista completa, com os pontos de atenção de cada item, está em [`docs/tasks
 
 ## Roadmap
 
-Já feitas: T01 a T14, o consentimento obrigatório e **T16 a T19**. Mapeadas, **ainda não iniciadas**:
+Já feitas: T01 a T14, o consentimento obrigatório e **T16 a T20**. Mapeadas, **ainda não iniciadas**:
 
 1. **T15** Escala: vários JVBs, autoscaling dos workers (ou GPU) e teste de carga de 100 a 1.000 salas.
 2. **Endurecimentos:** expulsão do paciente pelo cliente do médico e pelo Prosody, gatilho da captura no servidor, login definitivo do médico (provedor de identidade), autenticação de cliente na fila, container do worker, renovação do token de entrada, recifragem do histórico e verificação com pessoas reais.

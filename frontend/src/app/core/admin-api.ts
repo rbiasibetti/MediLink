@@ -24,6 +24,12 @@ export interface Entrega {
   criadoEm: string; proximaTentativaEm: string | null; entregueEm: string | null; consultaId: string; integradorId: string;
 }
 
+export interface MedicoAdm {
+  id: string; nome: string; identificadorProfissional: string; email: string; ativo: boolean; temSenha: boolean;
+  totpHabilitado: boolean; totpConfirmado: boolean; deIntegracao: boolean;
+}
+export interface NovoMedicoAdm { nome: string; identificadorProfissional: string; email: string; senha: string; exigirTotp: boolean }
+
 /** Cliente da API administrativa (T18). Todas as chamadas, menos o login, levam a sessão do administrador. */
 @Injectable({ providedIn: 'root' })
 export class AdminApi {
@@ -37,6 +43,15 @@ export class AdminApi {
 
   painel(dias: number): Observable<Painel> { return this.http.get<Painel>(`/api/admin/painel?dias=${dias}`, this.h()); }
   reenviarJob(consultaId: string): Observable<void> { return this.http.post<void>(`/api/admin/jobs/${consultaId}/reenviar`, null, this.h()); }
+
+  medicos(): Observable<MedicoAdm[]> { return this.http.get<MedicoAdm[]>('/api/admin/medicos', this.h()); }
+  criarMedico(m: NovoMedicoAdm): Observable<MedicoAdm> { return this.http.post<MedicoAdm>('/api/admin/medicos', m, this.h()); }
+  alterarMedico(id: string, nome: string, identificadorProfissional: string): Observable<MedicoAdm> {
+    return this.http.put<MedicoAdm>(`/api/admin/medicos/${id}`, { nome, identificadorProfissional }, this.h());
+  }
+  redefinirSenhaMedico(id: string, senha: string): Observable<MedicoAdm> { return this.http.post<MedicoAdm>(`/api/admin/medicos/${id}/senha`, { senha }, this.h()); }
+  ativarMedico(id: string, ativo: boolean): Observable<MedicoAdm> { return this.http.post<MedicoAdm>(`/api/admin/medicos/${id}/${ativo ? 'ativar' : 'desativar'}`, null, this.h()); }
+  totpMedico(id: string, habilitar: boolean): Observable<MedicoAdm> { return this.http.post<MedicoAdm>(`/api/admin/medicos/${id}/totp/${habilitar ? 'habilitar' : 'desabilitar'}`, null, this.h()); }
 
   integradores(): Observable<Integrador[]> { return this.http.get<Integrador[]>('/api/admin/integradores', this.h()); }
   criarIntegrador(nome: string): Observable<Integrador> { return this.http.post<Integrador>('/api/admin/integradores', { nome }, this.h()); }

@@ -3,6 +3,7 @@ import { CanActivateFn, Router, Routes } from '@angular/router';
 import { MedicoAuth } from './core/medico-auth';
 import { LoginMedico } from './medico/login-medico';
 import { Agendar } from './medico/agendar';
+import { ConsultasMedico } from './medico/consultas-medico';
 import { ConsultaMedico } from './medico/consulta-medico';
 import { AcessoPaciente } from './paciente/acesso-paciente';
 import { AdminAuth } from './core/admin-auth';
@@ -31,6 +32,7 @@ export const routes: Routes = [
   // Link de uso único enviado pelo sistema de origem (T17): {base}/medico/acesso#t=<token>
   { path: 'medico/acesso', component: AcessoMedico },
   { path: 'medico/transcricao/:consultaId', component: TranscricaoMedico, canActivate: [medicoGuard] },
+  { path: 'medico/consultas', component: ConsultasMedico, canActivate: [medicoGuard] },
   { path: 'medico/agendar', component: Agendar, canActivate: [medicoGuard] },
   { path: 'medico/consulta/:agendamentoId', component: ConsultaMedico, canActivate: [medicoGuard] },
   { path: '', pathMatch: 'full', redirectTo: 'medico' },

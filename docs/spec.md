@@ -21,6 +21,7 @@ Fora de escopo: gravação de vídeo e transcrição em tempo real.
 | RF-06 | **Captura e transcrição pós-consulta.** O áudio é capturado durante a consulta e transcrito de forma assíncrona após o encerramento. | Encerrada a consulta, um job de transcrição é enfileirado com referência ao áudio. |
 | RF-07 | **Transcrição no banco e descarte do áudio.** Concluída a transcrição, o texto é gravado em registro vinculado à consulta e o áudio é descartado. | Existe registro de transcrição no banco e o arquivo de áudio não existe mais em nenhum armazenamento. |
 | RF-08 | **Consentimento obrigatório.** Toda teleconsulta é registrada: o paciente precisa aceitar o termo (gravação e transcrição) antes de chegar à sala de espera. | Sem o aceite o paciente não chega à espera nem à sala (`409`); o médico não aceita quem não consentiu; retirar o consentimento durante a consulta interrompe a captura e encerra a participação do paciente. A captura continua conferindo o consentimento por conta própria. |
+| RF-12 | **Médico com login próprio.** O administrador cadastra médicos (e-mail e senha); o médico entra, vê as próprias consultas e lê as transcrições. O TOTP no login é habilitado pelo administrador, médico a médico. | Login recusa com resposta genérica e bloqueia após 5 falhas; médico desativado perde o acesso na hora; um médico nunca vê consulta de outro; a lista não traz o texto da transcrição. |
 
 ## Domínio
 

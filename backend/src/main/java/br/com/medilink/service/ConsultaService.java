@@ -146,7 +146,8 @@ public class ConsultaService {
 
 	/** Só o médico dono vê a consulta; para os demais ela "não existe". */
 	public Consulta daMedico(String medicoEmail, UUID consultaId) {
-		var medico = medicos.findByEmail(medicoEmail).orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
+		var medico = medicos.findByEmail(medicoEmail).filter(m -> m.isAtivo())
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN)); // médico desativado perde o acesso na hora
 		return consultas.findById(consultaId)
 				.filter(c -> c.getAgendamento().getMedico().getId().equals(medico.getId()))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));

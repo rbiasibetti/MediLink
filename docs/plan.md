@@ -313,6 +313,17 @@ Backend 246 testes (SQL Server local, Redpanda real, servidor HTTPS local com ce
 - Um perfil "encarregado de dados/DPO" separado do administrador não existe.
 - Recebimento de eventos de presença do Jitsi (para encerrar por inatividade sem depender da tela) e a expulsão do paciente pelo Prosody seguem pendentes.
 
+## Login do médico por senha e consultas do médico (T20)
+
+- **Cadastro:** só o administrador cria médicos (`/api/admin/medicos`: nome, registro profissional, e-mail, senha inicial de 12 a 128 caracteres). O e-mail (minúsculo) é o usuário. Médicos criados por sistemas integrados (T16) não têm senha: entram pelo link de uso único (T17); o administrador pode dar uma senha a eles. Desativar o médico corta o acesso na hora (a sessão é conferida a cada requisição e `ConsultaService.daMedico` recusa médico inativo, inclusive por link).
+- **Login:** `POST /api/medico/login` com e-mail, senha e, se exigido, o código TOTP. BCrypt custo 12; falha de qualquer tipo (e-mail inexistente, sem senha, inativo, senha ou código errados) é o mesmo `403` genérico, com hash falso para igualar o tempo; 5 falhas bloqueiam por 15 min (`429`). Toda tentativa é auditada (`MEDICO_LOGIN_OK|FALHA|BLOQUEADO`, `MEDICO_TOTP_*`).
+- **TOTP a critério do administrador:** a coluna `totp_habilitado` é decidida por médico no cadastro ou depois (`POST /api/admin/medicos/{id}/totp/habilitar|desabilitar`). Habilitado e não confirmado, o primeiro login com a senha certa devolve o segredo (e a URI `otpauth`) e só entra quando o médico prova com um código; depois o código é exigido sempre, sem aceitar o mesmo passo duas vezes. Habilitar de novo zera o segredo (troca de celular). O segredo fica cifrado em repouso (`enc:`). O médico não liga nem desliga o próprio TOTP.
+- **Sessão:** JWT próprio (chave e audiência `medilink-medico-login`, derivados do segredo do servidor; não vale para o administrador, para a sessão presa a uma consulta nem para o Jitsi), 8 h (`medilink.medico-login.sessao-ttl`), autentica como `ROLE_MEDICO` no `LoginMedicoFiltro` e acessa todas as consultas DO médico. A sessão por link (T17) continua presa a uma consulta e **não** alcança a lista.
+- **Consultas do médico:** `GET /api/consultas?status=&pagina=&tamanho=` (máx. 50), da mais recente para a mais antiga, só as do médico autenticado. Cada item: consulta, agendamento, nome do paciente, horário, estado e `transcricao` (`NAO_APLICAVEL`, `EM_PROCESSAMENTO`, `DISPONIVEL`, `SEM_AUDIO`, `FALHA`, `EXPIRADA`). A lista **nunca carrega o texto** nem CPF; o texto sai por `GET /api/consultas/{id}/transcricao`, que audita cada leitura.
+- **Banco:** migração V12 (colunas em `medico`; médicos existentes ficam ativos, sem senha e sem TOTP).
+- **Frontend:** login com e-mail e senha (e enrolamento do TOTP), `/medico/consultas` (filtro, paginação, link para a sala ou a transcrição) e aba **Médicos** do painel do administrador. O HTTP Basic provisório continua só no perfil `dev`.
+- **Verificação:** backend `LoginMedicoApiTest` 10, `MedicoAdminApiTest` 5, `HistoricoDeConsultasApiTest` 4; frontend 69 testes. Não exercitado: telas em navegador real e SQL Server 2019 exato.
+
 ## Contratos de API
 
 | Método | Rota | Função | Tarefa |
