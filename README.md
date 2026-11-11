@@ -2,6 +2,8 @@
 
 Plataforma de **telemedicina self-hosted** sobre o [Jitsi Meet](https://jitsi.org/). O médico (ou um sistema integrado) agenda a consulta e o paciente recebe um link; o paciente confirma a identidade por CPF, aceita o termo de consentimento e aguarda o aceite do médico; a consulta acontece por vídeo; o áudio é capturado **no servidor**, transcrito de forma assíncrona e a transcrição vai para o prontuário (e, se configurado, é devolvida por webhook ao sistema de origem). Nenhum dado sensível sai da infraestrutura própria, salvo o destino de webhook que o administrador cadastrar.
 
+> **Manual do usuário com imagens:** [`docs/manual/`](docs/manual/README.md) (paciente, médico, administrador e integração).
+
 ![Java](https://img.shields.io/badge/Java-25-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F)
 ![Angular](https://img.shields.io/badge/Angular-21-DD0031)
@@ -29,6 +31,7 @@ Plataforma de **telemedicina self-hosted** sobre o [Jitsi Meet](https://jitsi.or
 - [API](#api)
 - [Segurança e privacidade](#segurança-e-privacidade)
 - [Implantação em produção](#implantação-em-produção)
+  - [Do desenvolvimento para a produção: o que mudar e o que fechar](#do-desenvolvimento-para-a-produção-o-que-mudar-e-o-que-fechar)
   - [1. Topologia e portas](#1-topologia-e-portas)
   - [2. Pré-requisitos e dimensionamento](#2-pré-requisitos-e-dimensionamento)
   - [3. DNS, certificados e firewall](#3-dns-certificados-e-firewall)
@@ -238,8 +241,9 @@ MediLink/
 ├── infra/
 │   ├── jitsi/                     Jitsi self-hosted: compose, .env, regras de nginx, módulo Prosody, config do Jicofo
 │   │   └── e2e/                   verificação ponta a ponta (Chrome headless com microfone falso)
-│   └── dev/                       smtp_sink.py, redpanda.sh, webhook_sink.py e smoke_integracao.py (desenvolvimento)
+│   └── dev/                       smtp_sink.py, redpanda.sh, webhook_sink.py, smoke_integracao.py e capturar_manual.py (desenvolvimento)
 └── docs/
+    ├── manual/                    manual do usuário (paciente, médico, administrador, integração) e as capturas de tela em img/
     ├── spec.md                    especificação (o quê e por quê)
     ├── plan.md                    plano técnico e registro de decisões (o como)
     └── tasks.md                   tarefas, estado e backlog mapeado
@@ -256,7 +260,7 @@ MediLink/
 | SQL Server | 2019 ou superior, acessível em `localhost:1433` |
 | Docker ou Podman | para o Jitsi e o Redpanda; com Podman rootless é preciso o socket do usuário (`systemctl --user start podman.socket`) e o `docker-compose` |
 | Python | 3.12 com `venv` (worker de transcrição) |
-| Google Chrome | só para a verificação ponta a ponta (`infra/jitsi/e2e`) |
+| Google Chrome | só para a verificação ponta a ponta (`infra/jitsi/e2e`) e para regerar as capturas do manual (`infra/dev/capturar_manual.py`) |
 
 Todos os comandos partem da raiz do repositório.
 
@@ -559,6 +563,76 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 
 > **Escopo.** Este guia leva uma instalação do zero até uma consulta de ponta a ponta. Os nomes de exemplo são `app.clinica.com.br` (frontend + API), `api.clinica.com.br` (nome **interno** do backend, usado pelo nginx e pelo JVB), `fila.interno.clinica.com.br` (broker) e `meet.clinica.com.br` (Jitsi). Troque pelos seus. Comandos em Debian/Ubuntu com `systemd`; adapte à sua distribuição.
 
+### Do desenvolvimento para a produção: o que mudar e o que fechar
+
+Esta seção consolida, em um lugar só, **tudo o que muda** entre o ambiente de desenvolvimento e a produção e **tudo o que precisa ser decidido ou fechado** antes de atender pacientes reais. As seções seguintes (1 a 15) dão os comandos de cada item.
+
+**Ordem recomendada da implantação** (cada etapa depende da anterior):
+
+1. Decidir os nomes e o desenho de rede (seções 1 e 3); DNS e certificados.
+2. Gerar e guardar os segredos (seção 4).
+3. SQL Server com TLS e usuário da aplicação (seção 5).
+4. Fila Redpanda/Kafka com TLS e tópicos (seção 6).
+5. Backend em modo `prod` (seção 7): a subida valida a configuração e aplica as migrações.
+6. Jitsi com as customizações do MediLink e o JVB alcançando o backend por `wss://` (seção 8).
+7. Worker de transcrição com o modelo baixado e a mesma chave do backend (seção 9).
+8. Frontend compilado com o domínio do Jitsi e nginx da aplicação (seção 10).
+9. Administrador, termo, médicos e sistemas integrados (seção 11).
+10. Verificação ponta a ponta com a consulta de teste (seção 12) e checklist (seção 14).
+
+#### A. O que muda: do desenvolvimento para a produção
+
+| # | Item | Em desenvolvimento | Em produção | Onde mudar |
+| --- | --- | --- | --- | --- |
+| 1 | **Perfil do backend** | `dev` (`./run-mssql.sh dev`) | `prod` (`SPRING_PROFILES_ACTIVE=prod`): a subida **falha** se banco, HTTPS, fila ou flags estiverem inseguros | `backend.env` |
+| 2 | **Contas de exemplo** | O perfil `dev` cria o médico `medico@medilink.local` (login Basic em memória e senha no banco) e o administrador `admin@medilink.local`, com **senhas públicas no repositório** | Nada disso existe: o primeiro administrador nasce de `MEDILINK_ADMIN_EMAIL`/`MEDILINK_ADMIN_SENHA` (senha forte, **removidas do ambiente depois do 1º login**) e os médicos são cadastrados pelo administrador | `backend.env`, painel |
+| 3 | **Banco** | `medilink_dev`, usuário `sa`, URL com `trustServerCertificate=true` | Banco `medilink`, usuário dedicado (`db_owner`, para as migrações), URL com `encrypt=true;trustServerCertificate=false` e certificado válido | seção 5, `backend.env` |
+| 4 | **Segredos** | Gerados por `openssl` no `init`, em arquivos locais ignorados pelo git | Em cofre, distintos por ambiente, com `MEDILINK_DATA_KEY` **guardada separada** do backup do banco | seção 4 |
+| 5 | **HTTPS do backend** | HTTP na porta 8090 | HTTPS (keystore PKCS12 com `file:`), inclusive para o WSS do audio sink | `MEDILINK_TLS_KEYSTORE*` |
+| 6 | **Jitsi** | `https://localhost:8443`, certificado autoassinado, `JVB_ADVERTISE_IPS=127.0.0.1`, `PUBLIC_URL` local, `CSP_HEADER` para `localhost:4200`, `SINK_WS_URL=ws://host.containers.internal:8090/…`, portas 8000/8443 | Domínio público, certificado válido, **IP público** no `JVB_ADVERTISE_IPS`, `CSP_HEADER` com a origem do app, `SINK_WS_URL=wss://api…:8090/…`, portas 80/443 e `10000/udp` abertas | `infra/jitsi/.env`, seção 8 |
+| 7 | **Frontend** | `ng serve` com proxy para o backend; `JITSI_DOMAIN=localhost:8443` | `ng build` com `JITSI_DOMAIN` **do domínio de produção editado antes de compilar** (é fixado no build), servido pelo nginx, com `/api` em proxy | `frontend/src/app/core/config.ts`, seção 10 |
+| 8 | **Fila** | Redpanda `dev-container`, sem TLS, dados efêmeros | Redpanda/Kafka com **TLS**, tópicos criados, retenção de 24 h, só em rede interna | seção 6; `SPRING_KAFKA_*` |
+| 9 | **Worker** | `venv` na pasta do projeto, Kafka sem TLS, pasta de áudio em `/tmp`, modelo em `worker/models` | Serviço `systemd` com o usuário do backend, `MEDILINK_KAFKA_SECURITY_PROTOCOL=SSL` + `MEDILINK_KAFKA_CA`, modelo baixado uma vez e `HF_HUB_OFFLINE=1`, mesma `MEDILINK_DATA_KEY` | seção 9 |
+| 10 | **Pasta de áudio** | `/tmp/medilink-audio` | `/var/lib/medilink/audio`, modo `700`, no mesmo usuário do backend e do worker; os arquivos já são cifrados pela aplicação, e **disco cifrado (LUKS)** é uma camada extra recomendada | `MEDILINK_SINK_DIR` |
+| 11 | **E-mail** | `infra/dev/smtp_sink.py` na porta 1025, sem TLS | Relay SMTP real com `MEDILINK_MAIL_AUTH=true` e `MEDILINK_MAIL_STARTTLS=true`; remetente de um domínio com **SPF e DKIM** | `backend.env` |
+| 12 | **Janela de reabertura** | `0s` nos testes (`MEDILINK_CONSULTA_TOLERANCIA_REABERTURA`) | Padrão **10 minutos** (a transcrição só começa depois dela): não defina `0s` | `backend.env` |
+| 13 | **Leitura da transcrição pelo médico** | Ligada (`medilink.transcricao.leitura-pelo-medico=true` no perfil `dev`) | **Desligada por padrão**: ligue com `MEDILINK_TRANSCRICAO_LEITURA_PELO_MEDICO=true` só depois de fechados os bloqueios da tabela B | `backend.env` |
+| 14 | **Retenção** | Valores de partida | Definir com o jurídico: `medilink.retencao.transcricao` (padrão `0s` = guardar), `audio-maximo` (7 dias) e a política de backup | arquivo de configuração externo |
+| 15 | **Termo de consentimento** | Minuta de engenharia (v2) | Texto **validado pelo jurídico e pelo encarregado de dados**, publicado no painel; se usar webhook, deve citar o envio ao sistema do cliente | painel, **Termo de consentimento** |
+| 16 | **Webhook** | `medilink.webhook.modo-dev=true` (aceita HTTP e endereços locais) | Só HTTPS com certificado válido e endereço público; o perfil `prod` **recusa subir** com `modo-dev` ligado | painel, **Sistemas e keys** |
+| 17 | **Texto legado** | `medilink.crypto.aceitar-texto-legado=true` | `false` (o perfil `prod` recusa subir com ele ligado) | já é o padrão |
+| 18 | **Logs e auditoria** | Console | Rotação, acesso restrito e retenção; o Prosody grava o JWT inteiro em erros de verificação | `journald`/`logrotate`, `docker logging` |
+| 19 | **Chrome de teste, microfone falso, `--ignore-certificate-errors`** | Usados só nas verificações `infra/jitsi/e2e` e nas capturas do manual | Nunca em produção; teste com navegadores e dispositivos reais | — |
+
+#### B. O que precisa ser fechado, decidido ou desenvolvido antes de pacientes reais
+
+A coluna **Tipo** diz o que cada item é: **Bloqueio** (não entre em produção sem fechar), **Recomendado** (reduz risco, a decisão é sua) ou **Decisão** (precisa de escolha do negócio ou do jurídico).
+
+| # | Item | Situação hoje | O que fazer | Tipo |
+| --- | --- | --- | --- | --- |
+| 1 | **Certificados reais em todos os saltos** (nginx, Jitsi, backend, SQL Server, fila) | Nada disso foi exercitado com certificado real (só com certificados de teste) | Seguir as seções 3 a 10 e rodar a verificação da seção 12; o perfil `prod` impede subir sem TLS | **Bloqueio** |
+| 2 | **JVB e Jicofo confiando no certificado do backend** (WSS do audio sink) | Com CA pública funciona; com CA privada, a instalação nos containers **não foi exercitada** | Copiar a CA para `jvb/custom-ca` e `jicofo/custom-ca`, testar de dentro do container e comprovar um áudio gravado | **Bloqueio** |
+| 3 | **Teste ponta a ponta no ambiente real** | Só com Chrome de teste e microfone falso | Consulta de teste completa (seção 12) com **pessoas e dispositivos reais**, redes diferentes e celular | **Bloqueio** |
+| 4 | **Termo de consentimento, base legal, RIPD e DPO** | O texto é uma minuta | Validação jurídica, publicação no painel, registro do tratamento e definição do encarregado | **Bloqueio** |
+| 5 | **Backup e restauração** | Não há rotina pronta | Backup diário do banco (e log), `MEDILINK_DATA_KEY` guardada **à parte**, chaves do Prosody e `.env` do Jitsi; **teste de restauração** | **Bloqueio** |
+| 6 | **Autenticação do cliente na fila (SASL/mTLS)** | **Não implementada no código**; só há TLS do servidor | Isolar a fila em rede privada com firewall; se for preciso ACL por usuário, é **desenvolvimento novo** (propriedades de SASL/keystore de cliente no backend e no worker). O tópico de resultados carrega o texto da consulta | **Bloqueio** (rede) / Decisão (ACL) |
+| 7 | **Expulsão do paciente ao retirar o consentimento** | Quem retira perde a credencial e a tela sai, mas o servidor **não o expulsa do Jitsi**: quem guardou o JWT (2 h) pode permanecer ou reentrar sem registro | Decidido: expulsão pelo cliente do médico (`kickParticipant`); **ainda não implementada**. Até lá, o médico deve **encerrar a consulta** quando vir o aviso | Decisão |
+| 8 | **Quem liga a captura é a página do médico** | Se a aba do médico cair antes de pedir a transcrição, nada é gravado (vira incidente no painel) | Monitorar incidentes `SEM_AUDIO`; avaliar o gatilho no servidor (pendente) | Recomendado |
+| 9 | **Login do médico por provedor de identidade (OIDC/SSO)** | Só e-mail e senha cadastrados pelo administrador, sem autocadastro nem recuperação por e-mail | Decidir se a senha + TOTP basta; **exigir TOTP para os médicos** (opção no cadastro) é fortemente recomendado | Decisão |
+| 10 | **Limites contra força bruta e abuso** | Bloqueio por conta (5 falhas/15 min), por agendamento (CPF) e limite por API key em **memória de cada instância**; o bloqueio por e-mail permite travar a conta de outro | `limit_req` por IP no nginx (exemplo na seção 10), `fail2ban` ou WAF; com várias instâncias, limite distribuído | Recomendado |
+| 11 | **Logs do Prosody com o JWT** | O Prosody registra o token inteiro em erros de `token_verification` | Acesso restrito, rotação curta e, se possível, nível de log menos verboso; o token vale por sala e expira em 2 h | Recomendado |
+| 12 | **Dimensionamento e carga (T15)** | Nunca houve teste acima de uma consulta por vez | Medir JVB, worker e banco com a carga esperada antes de crescer; o alvo de 1.000 salas é a etapa T15 (não iniciada) | Recomendado (Bloqueio se a meta for alta) |
+| 13 | **Alta disponibilidade** | Uma instância de cada componente; limites em memória por instância; sessões JWT stateless | Definir o nível de disponibilidade exigido; múltiplas instâncias exigem limite compartilhado e fila com mais de um nó | Decisão |
+| 14 | **Recifragem do histórico após rotacionar a chave de dados** | A rotação funciona (chaves anteriores), mas **não há rotina que recifre** o histórico | Manter as chaves antigas enquanto houver dado cifrado com elas | Recomendado |
+| 15 | **CSP e Permissions-Policy do nginx** | Escritas para o Angular e o Jitsi, **não validadas num navegador real** | Testar a consulta completa com os cabeçalhos ligados e ajustar | **Bloqueio** |
+| 16 | **SQL Server 2019 exato, TDE e endurecimento do SO** | Validado na 2022 Express; TDE exige Standard/Enterprise | Rodar em uma instância 2019 (ou superior) equivalente à de produção; ligar TDE se disponível; atualizações e firewall | Recomendado |
+| 17 | **Atualização de imagens e dependências** | Versões fixas (`JITSI_IMAGE_VERSION=stable-11248-2`, Redpanda `v26.2.6`) | Plano de atualização: testar numa cópia, repetir a verificação da seção 12 (a regra de nginx, o módulo Lua e o `custom-config.js` dependem da versão do Jitsi) | Recomendado |
+| 18 | **Monitoramento e alertas** | Só o `actuator/health` e o painel | Alertar sobre saúde, incidentes, *lag* da fila, disco de áudio, entregas de webhook com falha e validade de certificados | Recomendado |
+| 19 | **Leitura de transcrições pelo médico na plataforma** | Parâmetro `leitura-pelo-medico`, desligado por padrão | Decidir quando ligar (depois dos itens 5, 6, 9 e 10); o texto é decifrado a cada requisição e cada leitura é auditada | Decisão |
+| 20 | **Retenção e descarte** | Padrões de partida (áudio 7 dias, transcrição guardada, tentativas de CPF 24 h) | Alinhar ao prontuário e à LGPD; a auditoria nunca é apagada pela aplicação | Decisão |
+
+> **Regra prática.** Os itens 1 a 5, 15 e (para rede) 6 são **o mínimo para abrir a pacientes**. O restante tem a decisão registrada acima: se você aceita o risco residual, anote quem aceitou e quando.
+
 ### 1. Topologia e portas
 
 Instalação de referência com **três papéis**; numa clínica pequena as máquinas A e B podem ser a mesma (e a fila fica com o backend).
@@ -851,14 +925,15 @@ kafka-topics.sh --bootstrap-server fila.interno.clinica.com.br:9092 --command-co
    MEDILINK_SINK_TOKEN=<igual ao SINK_TOKEN do Jitsi>
    MEDILINK_SINK_DIR=/var/lib/medilink/audio
 
-   MEDILINK_TLS_KEYSTORE=/etc/medilink/tls/backend.p12
+   MEDILINK_TLS_KEYSTORE=file:/etc/medilink/tls/backend.p12
    MEDILINK_TLS_KEYSTORE_PASSWORD=<senha-do-keystore>
 
    # Leitura da transcrição pelo médico na plataforma: deixe false até concluir os bloqueios de acesso (veja a seção 14)
    MEDILINK_TRANSCRICAO_LEITURA_PELO_MEDICO=false
 
    MEDILINK_KAFKA_BOOTSTRAP=fila.interno.clinica.com.br:9092
-   MEDILINK_KAFKA_TRUSTSTORE=/etc/medilink/tls/fila-trust.p12
+   MEDILINK_KAFKA_TRUSTSTORE=file:/etc/medilink/tls/fila-trust.p12
+   SPRING_KAFKA_SSL_TRUST_STORE_TYPE=PKCS12
    MEDILINK_KAFKA_TRUSTSTORE_PASSWORD=<senha>
 
    MEDILINK_MAIL_HOST=smtp.seu-provedor.com
@@ -947,7 +1022,7 @@ O Jitsi roda em Docker a partir do `infra/jitsi/docker-compose.yml` (cópia **se
 
    ```bash
    CFG=/opt/medilink/jitsi-config
-   sudo mkdir -p $CFG/{web/custom-ca,web/nginx-custom,storage/web,storage/transcripts,tmp/web-load-test,prosody/config,prosody/prosody-plugins-custom,jicofo,jvb/custom-ca,jigasi,jibri}
+   sudo mkdir -p $CFG/{web/custom-ca,web/nginx-custom,storage/web,storage/transcripts,storage/prosody,tmp/web-load-test,prosody/config,prosody/custom-ca,prosody/prosody-plugins-custom,jicofo/custom-ca,jvb/custom-ca,jigasi,jibri}
    # 1) regra do nginx do Jitsi que bloqueia navegação direta
    sudo cp nginx-custom/10-bloquear-acesso-direto.conf $CFG/web/nginx-custom/
    # 2) restrições da interface, anexadas ao config.js
@@ -962,7 +1037,7 @@ O Jitsi roda em Docker a partir do `infra/jitsi/docker-compose.yml` (cópia **se
    docker compose up -d web prosody jicofo jvb
    ```
 
-4. **Confiança no certificado do backend (WSS).** O JVB abre o WebSocket do sink; ele precisa confiar no certificado de `api.clinica.com.br`. Com CA pública não há o que fazer. Com **CA privada**, copie o `.crt` da CA para `$CFG/jvb/custom-ca/` (o compose monta essa pasta em `/usr/local/share/ca-certificates` e a imagem a instala no início; ⚠ não exercitado) e reinicie o `jvb`. O mesmo vale para `$CFG/jicofo/custom-ca/` se o Jicofo precisar.
+4. **Confiança no certificado do backend (WSS).** O JVB abre o WebSocket do sink; ele precisa confiar no certificado de `api.clinica.com.br`. Com CA pública não há o que fazer. Com **CA privada**, copie o `.crt` da CA para `$CFG/jvb/custom-ca/` (o compose monta essa pasta em `/usr/local/share/ca-certificates` e a imagem a instala no início; ⚠ não exercitado) e reinicie o `jvb`. Copie a mesma CA também para `$CFG/jicofo/custom-ca/` (o Jicofo é quem recebe a URL do sink) e reinicie os dois. Os containers precisam **resolver o nome** `api.clinica.com.br` (DNS interno ou `extra_hosts`) e alcançar a porta 8090 do backend; confirme com um teste a partir de dentro do container (veja a seção 12).
 5. **Firewall da máquina B**: `80/tcp`, `443/tcp` e `10000/udp` abertos; o resto fechado.
 6. **Verifique** (seção 12): resposta 403 a `Sec-Fetch-Dest: document`, 200 a `iframe`, e recusa de quem não tem JWT.
 
@@ -1156,6 +1231,7 @@ O worker é um processo Python que consome a fila, **decifra o áudio em memóri
 | Painel | `/admin` → **Andamento** | contagens sem dado de paciente; nenhum incidente |
 | Ponta a ponta | Reunião de teste: paciente aceita o termo, médico entra pelo link, os dois falam um minuto, médico encerra | arquivos `.opus.enc` aparecem em `/var/lib/medilink/audio/<consulta>/`; após a janela de reabertura e o processamento, `GET /api/consultas/<id>/transcricao` devolve o texto e **a pasta de áudio some** |
 | Webhook (se usado) | Painel → **Webhooks** | entrega `ENTREGUE` (HTTP 2xx); assinatura válida no receptor |
+| JVB e Jicofo alcançam o backend | De dentro do container do JVB: `docker compose exec jvb curl -sS https://api.clinica.com.br:8090/actuator/health` (⚠ confirme que a imagem tem `curl`; senão use outro container na mesma rede) | `{"status":"UP"}` sem erro de certificado; se falhar, veja a CA em `custom-ca` e o DNS |
 | E-mail | Reunião de teste com `notificar: true` | resposta `notificacao.enviada: true` e o e-mail chega |
 
 ### 13. Operação
@@ -1193,6 +1269,8 @@ SELECT TOP 100 momento, ator, acao, recurso FROM audit_log ORDER BY momento DESC
 **Retenção.** Os padrões estão na tabela de propriedades. O prazo da transcrição (`medilink.retencao.transcricao`) vem como `0s` (guardar): defina com o jurídico. A auditoria **não** é apagada pela aplicação.
 
 ### 14. Checklist de entrada em produção
+
+O detalhe de cada item, com a situação atual no código, está nas tabelas A e B de [Do desenvolvimento para a produção](#do-desenvolvimento-para-a-produção-o-que-mudar-e-o-que-fechar).
 
 - [ ] Perfil `prod` ativo; o modo de desenvolvimento do webhook desligado; `MEDILINK_ADMIN_*` removidas depois do primeiro login.
 - [ ] Certificados válidos em `app`, `meet` e `api`; HTTPS forçado; HSTS ligado.
@@ -1327,6 +1405,12 @@ worker/.venv/bin/python infra/jitsi/e2e/verify_t13.py 'medico@medilink.local:dev
 python3 -I infra/dev/smoke_integracao.py
 ```
 
+Capturas de tela do manual (regeneram `docs/manual/img` com o sistema de desenvolvimento no ar: Jitsi, backend com `MEDILINK_CONSULTA_TOLERANCIA_REABERTURA=0s`, `ng serve` e o TOTP do administrador de dev em `~/.cache/medilink/smoke-totp`, criado por `smoke_integracao.py`). O botão desligar do Jitsi fica em `DESLIGAR_XY=836,734` na janela de 1280×800; `PARTES=admin` refaz só a administração:
+
+```bash
+DESLIGAR_XY=836,734 python3 -I infra/dev/capturar_manual.py
+```
+
 Os scripts ponta a ponta com áudio exigem o `MEDILINK_DATA_KEY` do backend no ambiente (para conferir os arquivos cifrados) e o Python do venv do worker (`cryptography`).
 
 Scripts de verificação contra o Prosody real (precisam do Jitsi e do backend em dev no ar):
@@ -1388,6 +1472,7 @@ Já feitas: T01 a T14, o consentimento obrigatório e **T16 a T20**. Mapeadas, *
 
 | Documento | Conteúdo |
 | --- | --- |
+| [`docs/manual/`](docs/manual/README.md) | **Manual do usuário** com imagens e navegação: paciente, médico, administrador e integração |
 | [`docs/spec.md`](docs/spec.md) | Requisitos funcionais, critérios de aceite, domínio e compliance |
 | [`docs/plan.md`](docs/plan.md) | Arquitetura, decisões, contratos de API, configuração da sala, captura de áudio, cifra, integração e webhook |
 | [`docs/tasks.md`](docs/tasks.md) | Backlog, estado de cada tarefa e pendências |
