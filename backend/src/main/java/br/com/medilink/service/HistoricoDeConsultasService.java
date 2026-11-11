@@ -7,6 +7,7 @@ import br.com.medilink.repository.ConsultaRepository;
 import br.com.medilink.repository.MedicoRepository;
 import br.com.medilink.repository.TranscricaoJobRepository;
 import br.com.medilink.repository.TranscricaoRepository;
+import br.com.medilink.transcricao.TranscricaoProperties;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -37,16 +38,18 @@ public class HistoricoDeConsultasService {
 			Instant inicioEm, Instant fimEm, TranscricaoEstado transcricao) {
 	}
 
-	public record Pagina(List<Resumo> itens, int pagina, int tamanho, long total) {
+	public record Pagina(List<Resumo> itens, int pagina, int tamanho, long total, boolean leituraDeTranscricao) {
 	}
 
 	private final MedicoRepository medicos;
 	private final ConsultaRepository consultas;
 	private final TranscricaoRepository transcricoes;
 	private final TranscricaoJobRepository jobs;
+	private final boolean leituraPeloMedico;
 
 	public HistoricoDeConsultasService(MedicoRepository medicos, ConsultaRepository consultas, TranscricaoRepository transcricoes,
-			TranscricaoJobRepository jobs) {
+			TranscricaoJobRepository jobs, TranscricaoProperties props) {
+		this.leituraPeloMedico = props.leituraPeloMedico();
 		this.medicos = medicos;
 		this.consultas = consultas;
 		this.transcricoes = transcricoes;
@@ -67,7 +70,7 @@ public class HistoricoDeConsultasService {
 		List<Resumo> itens = p.getContent().stream().map(c -> new Resumo(c.getId(), c.getAgendamento().getId(), c.getAgendamento().getPacienteNome(),
 				c.getAgendamento().getDataHora(), c.getStatus(), c.getInicioEm(), c.getFimEm(),
 				estado(c, comTranscricao.contains(c.getId()), jobsPorConsulta.get(c.getId())))).toList();
-		return new Pagina(itens, p.getNumber(), p.getSize(), p.getTotalElements());
+		return new Pagina(itens, p.getNumber(), p.getSize(), p.getTotalElements(), leituraPeloMedico);
 	}
 
 	static TranscricaoEstado estado(Consulta c, boolean temTranscricao, TranscricaoJob job) {

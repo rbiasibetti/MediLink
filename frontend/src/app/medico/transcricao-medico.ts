@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { ActivatedRoute } from '@angular/router';
 import { Api, TranscricaoLida } from '../core/api';
 
-type Estado = 'carregando' | 'processando' | 'pronta' | 'sem-audio' | 'aberta' | 'falhou' | 'expirou' | 'negado';
+type Estado = 'desabilitada' | 'carregando' | 'processando' | 'pronta' | 'sem-audio' | 'aberta' | 'falhou' | 'expirou' | 'negado';
 
 /** Leitura da transcrição pelo médico dono (T13/T17). Enquanto o worker processa, consulta de novo a cada poucos segundos. */
 @Component({
@@ -20,6 +20,7 @@ type Estado = 'carregando' | 'processando' | 'pronta' | 'sem-audio' | 'aberta' |
           @case ('sem-audio') { <p>Esta consulta não teve áudio capturado: não há transcrição.</p> }
           @case ('falhou') { <p>A transcrição falhou e está sob análise.</p> }
           @case ('expirou') { <p>A transcrição desta consulta não está mais disponível (prazo de retenção).</p> }
+          @case ('desabilitada') { <p>A leitura de transcrições por esta plataforma não está habilitada. Procure o administrador do sistema.</p> }
           @case ('negado') { <p>Você não tem acesso a esta consulta, ou o link expirou.</p> }
           @case ('pronta') {
             @if (transcricao(); as t) {
@@ -62,7 +63,8 @@ export class TranscricaoMedico {
       error: (e: HttpErrorResponse) => this.estado.set(
         e.status === 409 ? (e.error?.detail?.includes('falhou') ? 'falhou' : 'aberta')
           : e.status === 404 && e.error?.detail?.includes('áudio') ? 'sem-audio'
-          : e.status === 410 ? 'expirou' : 'negado'),
+          : e.status === 410 ? 'expirou'
+          : e.status === 403 && e.error?.detail?.includes('desabilitada') ? 'desabilitada' : 'negado'),
     });
   }
 

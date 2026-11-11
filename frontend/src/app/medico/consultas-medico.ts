@@ -46,7 +46,7 @@ const TRANSCRICAO: Record<TranscricaoEstado, string> = {
                     <td>{{ rotuloStatus(c.status) }}</td>
                     <td>{{ rotuloTranscricao(c.transcricao) }}</td>
                     <td>
-                      @if (c.transcricao === 'DISPONIVEL' || c.transcricao === 'EM_PROCESSAMENTO') {
+                      @if (p.leituraDeTranscricao && (c.transcricao === 'DISPONIVEL' || c.transcricao === 'EM_PROCESSAMENTO')) {
                         <a class="btn secundario" [routerLink]="['/medico/transcricao', c.consultaId]">Ver transcrição</a>
                       }
                       @if (aberta(c)) {
@@ -57,6 +57,7 @@ const TRANSCRICAO: Record<TranscricaoEstado, string> = {
                 }
               </tbody>
             </table>
+            @if (!p.leituraDeTranscricao) { <p class="muted" role="note">A leitura de transcrições por esta plataforma não está habilitada.</p> }
             <p class="muted">Página {{ p.pagina + 1 }} de {{ totalPaginas(p) }} · {{ p.total }} consulta(s)</p>
             <div class="acoes">
               <button class="btn secundario" type="button" [disabled]="p.pagina === 0" (click)="ir(p.pagina - 1)">Anterior</button>

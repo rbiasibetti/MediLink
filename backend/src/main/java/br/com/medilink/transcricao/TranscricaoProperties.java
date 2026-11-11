@@ -20,5 +20,10 @@ public record TranscricaoProperties(
 		@DefaultValue("20") int maxTentativas,
 		@DefaultValue("10s") Duration timeoutDeEnvio,
 		/** Quanto o broker guarda as mensagens dos dois tópicos (T14): cobre uma queda do consumidor, não mais que isso. */
-		@DefaultValue("24h") Duration retencaoDosTopicos) {
+		@DefaultValue("24h") Duration retencaoDosTopicos,
+		/**
+		 * Deixa o médico ler, pela plataforma, as transcrições das suas consultas (o texto é decifrado a cada requisição,
+		 * nunca guardado em claro). Desligado por padrão: só se liga depois de fechados os bloqueios de acesso necessários.
+		 */
+		@DefaultValue("false") boolean leituraPeloMedico) {
 }

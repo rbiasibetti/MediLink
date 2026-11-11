@@ -85,6 +85,7 @@ class HistoricoDeConsultasApiTest {
 				.andExpect(status().isOk())
 				.andExpect(header().string("Cache-Control", containsString("no-store")))
 				.andExpect(jsonPath("$.total").value(3))
+				.andExpect(jsonPath("$.leituraDeTranscricao").value(true))
 				.andExpect(jsonPath("$.itens", hasSize(3)))
 				.andExpect(jsonPath("$.itens[?(@.consultaId=='%s')].transcricao".formatted(aberta.id())).value("NAO_APLICAVEL"))
 				.andExpect(jsonPath("$.itens[?(@.consultaId=='%s')].transcricao".formatted(processando.id())).value("EM_PROCESSAMENTO"))

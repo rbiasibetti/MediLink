@@ -46,7 +46,8 @@ export interface ConsultaResumo {
   consultaId: string; agendamentoId: string; pacienteNome: string; dataHora: string; status: string;
   inicioEm: string | null; fimEm: string | null; transcricao: TranscricaoEstado;
 }
-export interface PaginaConsultas { itens: ConsultaResumo[]; pagina: number; tamanho: number; total: number }
+/** `leituraDeTranscricao` falso: a plataforma não está entregando o texto das transcrições ao médico (parâmetro do servidor). */
+export interface PaginaConsultas { itens: ConsultaResumo[]; pagina: number; tamanho: number; total: number; leituraDeTranscricao: boolean }
 
 /** Cliente da API do MediLink. As rotas de paciente são públicas; as de médico levam o Basic provisório. */
 @Injectable({ providedIn: 'root' })

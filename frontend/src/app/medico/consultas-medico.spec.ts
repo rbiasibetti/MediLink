@@ -13,7 +13,7 @@ async function assentar(f: { detectChanges(): void; whenStable(): Promise<unknow
 }
 const c = (id: string, status: string, transcricao: ConsultaResumo['transcricao']): ConsultaResumo => ({
   consultaId: id, agendamentoId: 'a-' + id, pacienteNome: 'Maria ' + id, dataHora: '2026-11-05T17:30:00Z', status, inicioEm: null, fimEm: null, transcricao });
-const pagina = (itens: ConsultaResumo[], total = itens.length, n = 0): PaginaConsultas => ({ itens, pagina: n, tamanho: 20, total });
+const pagina = (itens: ConsultaResumo[], total = itens.length, n = 0, leitura = true): PaginaConsultas => ({ itens, pagina: n, tamanho: 20, total, leituraDeTranscricao: leitura });
 
 describe('ConsultasMedico', () => {
   function montar(api: Record<string, unknown>) {
@@ -34,6 +34,15 @@ describe('ConsultasMedico', () => {
     expect(texto).toContain('Maria 1');
     expect(texto).toContain('Sem áudio');
     expect(texto).toContain('Em processamento');
+  });
+
+  it('com a leitura desabilitada no servidor não oferece o link da transcrição e avisa', async () => {
+    const f = montar({ consultas: vi.fn(() => of(pagina([c('1', 'ENCERRADA', 'DISPONIVEL')], 1, 0, false))) });
+    await assentar(f);
+
+    const links = Array.from((f.nativeElement as HTMLElement).querySelectorAll('a')).map((a) => a.getAttribute('href'));
+    expect(links).not.toContain('/medico/transcricao/1');
+    expect(f.nativeElement.textContent).toContain('não está habilitada');
   });
 
   it('o filtro volta para a primeira página e a paginação navega', async () => {

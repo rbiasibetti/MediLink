@@ -380,6 +380,7 @@ Propriedades que podem ser ajustadas (por arquivo de configuração externo do S
 | `medilink.retencao.audio-maximo` | `7d` | Teto de guarda do áudio, mesmo de job que falhou |
 | `medilink.retencao.transcricao` | `0s` | Prazo para apagar a transcrição (`0s` = guardar); transcrição não entregue por webhook nunca é apagada |
 | `medilink.transcricao.retencao-dos-topicos` | `24h` | `retention.ms` dos dois tópicos da fila |
+| `medilink.transcricao.leitura-pelo-medico` (env `MEDILINK_TRANSCRICAO_LEITURA_PELO_MEDICO`) | **`false`** | Deixa o médico ler, pela plataforma, as transcrições das suas consultas; o texto é decifrado a cada requisição (no banco fica cifrado). Desligado por padrão: ligue só depois de fechados os bloqueios de acesso. Desligado, `GET …/transcricao` responde `403`, a tentativa é auditada e a lista não oferece o link. O webhook não depende deste parâmetro. O perfil `dev` liga |
 | `medilink.integracao.limite-por-minuto` | `120` | Requisições por API key e por minuto (por instância) |
 | `medilink.admin.sessao-ttl` / `max-falhas` / `bloqueio` | `30m` / `5` / `15m` | Sessão e bloqueio do administrador |
 | `medilink.medico-login.sessao-ttl` / `max-falhas` / `bloqueio` | `8h` / `5` / `15m` | Sessão e bloqueio do login do médico por senha |
@@ -433,7 +434,7 @@ Rotas do **médico** exigem autenticação (a **sessão** do login por e-mail e 
 | `GET` | `/api/consultas?status=&pagina=&tamanho=` | médico (login) | Consultas do médico, da mais recente para a mais antiga, com a situação da transcrição de cada uma (sem o texto). A sessão por link não alcança esta rota |
 | `GET` | `/api/me` | médico | Nome e e-mail do médico autenticado |
 | `GET` | `/api/consultas/{id}` | médico | Estado da consulta e se há paciente aguardando (também é o sinal de vida do médico) |
-| `GET` | `/api/consultas/{id}/transcricao` | médico | Transcrição com falantes e tempos (`200`); `202` enquanto processa; `409` consulta aberta ou transcrição falhou; `404` de outro médico ou sem áudio; `410` expirada. Cada leitura é auditada |
+| `GET` | `/api/consultas/{id}/transcricao` | médico | **Só com `leitura-pelo-medico=true`** (senão `403`). Transcrição com falantes e tempos (`200`); `202` enquanto processa; `409` consulta aberta ou transcrição falhou; `404` de outro médico ou sem áudio; `410` expirada. Cada leitura é auditada |
 | `POST` | `/api/consultas/{id}/aceite` | médico | Admite o paciente (idempotente) |
 | `POST` | `/api/consultas/{id}/encerrar` | médico | Encerra a consulta em andamento (idempotente) e cria o job de transcrição |
 | `POST` | `/api/consultas/{id}/reabrir` | médico | Reabre uma consulta encerrada há pouco (dentro da tolerância) |
@@ -540,6 +541,7 @@ Os erros seguem RFC 9457 (`ProblemDetail`), sem repetir valores informados (por 
 - **Aceite no backend**: a credencial do Jitsi do paciente só é emitida depois do aceite do médico. Como a sala do Jitsi nasce aberta, esse portão fica no backend, e sem JWT ninguém entra.
 - **Interface do Jitsi não exposta**: navegação direta (`Sec-Fetch-Dest: document`) recebe 403 e só o iframe do MediLink carrega a interface; `frame-ancestors` restringe quem pode embutir. É uma camada de ocultação; **a fronteira de segurança é o JWT**.
 - **Integração por API key**: key de 256 bits só no cabeçalho e guardada como hash, com escopos, validade, revogação e limite de uso; um sistema nunca enxerga o de outro; o médico entra por **link de uso único** (token no fragmento da URL, 5 min) que vira uma sessão presa a UMA consulta, e o JWT do Jitsi nunca sai da plataforma.
+- **Leitura da transcrição pelo médico (parâmetro de inicialização)**: `medilink.transcricao.leitura-pelo-medico`, desligado por padrão. Ligado, o texto é decifrado em memória a cada requisição e só o médico dono o recebe (cada leitura é auditada); desligado, nem o carrega do banco. Serve para liberar a leitura somente depois dos bloqueios necessários.
 - **Login do médico**: e-mail e senha (BCrypt custo 12) com resposta de falha sempre igual, bloqueio após 5 falhas, TOTP exigido médico a médico por decisão do administrador (segredo cifrado, sem reutilizar o mesmo código), sessão própria que não vale para outras áreas e corte imediato ao desativar o médico. A lista de consultas nunca carrega o texto da transcrição.
 - **Administração**: senha (BCrypt) + TOTP com código de uso único, bloqueio por tentativas, sessão curta só em memória, painel sem nenhum dado de paciente, tudo auditado.
 - **Webhook**: destino preso à URL base cadastrada, só HTTPS com certificado e nome verificados, nenhum endereço interno (anti-SSRF, com o IP fixado na conexão), nenhum redirecionamento, corpo assinado por HMAC com carimbo de tempo e sem CPF, e-mail nem nome do paciente.
@@ -852,6 +854,9 @@ kafka-topics.sh --bootstrap-server fila.interno.clinica.com.br:9092 --command-co
    MEDILINK_TLS_KEYSTORE=/etc/medilink/tls/backend.p12
    MEDILINK_TLS_KEYSTORE_PASSWORD=<senha-do-keystore>
 
+   # Leitura da transcrição pelo médico na plataforma: deixe false até concluir os bloqueios de acesso (veja a seção 14)
+   MEDILINK_TRANSCRICAO_LEITURA_PELO_MEDICO=false
+
    MEDILINK_KAFKA_BOOTSTRAP=fila.interno.clinica.com.br:9092
    MEDILINK_KAFKA_TRUSTSTORE=/etc/medilink/tls/fila-trust.p12
    MEDILINK_KAFKA_TRUSTSTORE_PASSWORD=<senha>
@@ -906,7 +911,7 @@ kafka-topics.sh --bootstrap-server fila.interno.clinica.com.br:9092 --command-co
    curl --cacert ca.pem https://api.clinica.com.br:8090/actuator/health        # {"status":"UP"}
    ```
 
-> **Médico em produção.** Há duas formas de entrar: (1) **e-mail e senha**, com o médico cadastrado pelo administrador em **Médicos** (seção 11), e (2) o **link de uso único** que o sistema integrado obtém em `…/acesso-medico`, preso a uma consulta. Quem tem login vê todas as próprias consultas em `/medico/consultas` e lê as transcrições; quem entra só por link vê apenas aquela consulta. O HTTP Basic é só do perfil `dev`.
+> **Médico em produção.** Há duas formas de entrar: (1) **e-mail e senha**, com o médico cadastrado pelo administrador em **Médicos** (seção 11), e (2) o **link de uso único** que o sistema integrado obtém em `…/acesso-medico`, preso a uma consulta. Quem tem login vê todas as próprias consultas em `/medico/consultas` e, com `MEDILINK_TRANSCRICAO_LEITURA_PELO_MEDICO=true`, lê as transcrições; quem entra só por link vê apenas aquela consulta. O HTTP Basic é só do perfil `dev`.
 
 ### 8. Jitsi
 
@@ -1198,6 +1203,7 @@ SELECT TOP 100 momento, ator, acao, recurso FROM audit_log ORDER BY momento DESC
 - [ ] Segredos distintos por ambiente, em cofre; `MEDILINK_DATA_KEY` com cópia segura **separada** do banco.
 - [ ] Verificação do bloqueio de acesso direto ao Jitsi (403/200) e de recusa sem JWT.
 - [ ] Consulta de teste ponta a ponta com transcrição e áudio apagado; webhook e e-mail testados.
+- [ ] Decidido se a leitura de transcrições pelo médico será ligada (`MEDILINK_TRANSCRICAO_LEITURA_PELO_MEDICO=true`) e, se sim, concluídos os bloqueios de acesso que você exige antes (rede, login com TOTP para os médicos, limite por IP no proxy).
 - [ ] Termo de consentimento revisado e publicado pelo jurídico/DPO; base legal e Relatório de Impacto documentados.
 - [ ] NTP ativo; monitoramento e alertas configurados; procedimento de restauração testado.
 - [ ] Teste com pessoas e dispositivos reais (câmera, microfone, redes diferentes) — **o que foi testado até aqui usou um Chrome de teste com microfone falso**.
@@ -1298,14 +1304,14 @@ Na arquitetura de transcrição do Jitsi atual, o Jicofo só manda o JVB exporta
 O banco dos testes é **sempre o SQL Server local** (`medilink_test`); não há banco em memória.
 
 ```bash
-# backend: 267 testes (unitários e de integração: audio sink com servidor real, fila no Redpanda local, webhook com TLS real)
+# backend: 272 testes (unitários e de integração: audio sink com servidor real, fila no Redpanda local, webhook com TLS real)
 cd backend && ./run-mssql.sh test
 ./run-mssql.sh test -Dtest=ConsultaAceiteApiTest    # só uma classe
 
 # worker de transcrição: 39 testes (sem modelo e sem broker)
 cd worker && .venv/bin/python -m pytest -q
 
-# frontend: 69 testes (Vitest)
+# frontend: 71 testes (Vitest)
 cd frontend && npx ng test --watch=false
 
 # ponta a ponta com Jitsi real (pare o ng serve antes: a porta 4200 precisa estar livre)

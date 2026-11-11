@@ -21,6 +21,15 @@ async function assentar(f: { detectChanges(): void; whenStable(): Promise<unknow
 }
 const erro = (status: number, detail = '') => throwError(() => new HttpErrorResponse({ status, error: { detail } }));
 
+describe('TranscricaoMedico (leitura desabilitada)', () => {
+  it('explica que a leitura não está habilitada quando o servidor responde 403 desabilitada', async () => {
+    const f = montar({ transcricao: vi.fn(() => erro(403, 'A leitura de transcrições pela plataforma está desabilitada.')) });
+    await assentar(f);
+
+    expect(f.nativeElement.textContent).toContain('não está habilitada');
+  });
+});
+
 describe('TranscricaoMedico', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

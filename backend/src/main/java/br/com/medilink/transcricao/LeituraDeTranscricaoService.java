@@ -9,6 +9,8 @@ import br.com.medilink.repository.TranscricaoJobRepository;
 import br.com.medilink.repository.TranscricaoRepository;
 import br.com.medilink.service.AuditService;
 import br.com.medilink.service.ConsultaService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +23,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Leitura da transcrição pelo médico dono da consulta. Cada leitura é auditada (sem o conteúdo). */
+/**
+ * Leitura da transcrição pelo médico dono da consulta. Cada leitura é auditada (sem o conteúdo). Só funciona com
+ * {@code medilink.transcricao.leitura-pelo-medico=true}: o texto é decifrado ao carregar, a cada requisição.
+ */
 @Service
 public class LeituraDeTranscricaoService {
 
@@ -38,8 +43,14 @@ public class LeituraDeTranscricaoService {
 	private final AuditService auditoria;
 	private final JsonMapper json;
 
+	private static final Logger log = LoggerFactory.getLogger(LeituraDeTranscricaoService.class);
+
+	private final boolean habilitada;
+
 	public LeituraDeTranscricaoService(ConsultaService consultas, TranscricaoRepository transcricoes, TranscricaoJobRepository jobs,
-			AuditService auditoria, JsonMapper json) {
+			AuditService auditoria, JsonMapper json, TranscricaoProperties props) {
+		this.habilitada = props.leituraPeloMedico();
+		log.info("Leitura da transcrição pelo médico: {}", habilitada ? "HABILITADA" : "desabilitada (medilink.transcricao.leitura-pelo-medico)");
 		this.consultas = consultas;
 		this.transcricoes = transcricoes;
 		this.jobs = jobs;
@@ -61,6 +72,10 @@ public class LeituraDeTranscricaoService {
 			// Consulta de outro médico (ou inexistente): a tentativa fica registrada, ainda que a resposta seja 404.
 			auditoria.registrarEmTransacaoPropria(medicoEmail, "TRANSCRICAO_ACESSO_NEGADO", "consulta/" + consultaId);
 			throw negado;
+		}
+		if (!habilitada) { // nem chega a carregar (e decifrar) o texto
+			auditoria.registrarEmTransacaoPropria(medicoEmail, "TRANSCRICAO_LEITURA_DESABILITADA", "consulta/" + consultaId);
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "A leitura de transcrições pela plataforma está desabilitada.");
 		}
 		Optional<Transcricao> pronta = transcricoes.findByConsultaId(consultaId);
 		if (pronta.isPresent()) {
