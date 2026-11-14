@@ -107,6 +107,27 @@ def main():
     r_outra, _ = verify_auth.entrar(sala + "-outra", pac["jwt"], "x")
     conferir("JWT do paciente não abre outra sala", r_outra != "ACEITO", r_outra)
 
+    # --- Segurança: o paciente NUNCA pode ser moderador, nem sozinho na sala (auto-owner do Jicofo desligado). ---
+    # Com o auto-owner ligado, o primeiro ocupante de uma sala sem moderador é promovido a owner: o paciente que
+    # ficasse sozinho (médico saiu) ou reentrasse após "encerrar para todos" viraria moderador e poderia encerrar
+    # a reunião para todos. Aqui o médico NUNCA entra nesta sala, então o paciente entra de fato sozinho.
+    st, ag2 = api(base, "/api/agendamentos", {"pacienteNome": "Ana Paula", "pacienteCpf": CPF, "dataHora": quando}, auth)
+    sala2 = ag2["roomName"]
+    api(base, f"/api/salas/{sala2}/validar-cpf", {"cpf": CPF})
+    st, ent2 = api(base, f"/api/salas/{sala2}/validar-cpf", {"cpf": CPF})
+    consentir(base, ag2["consultaId"], ent2["tokenEntrada"])
+    api(base, f"/api/salas/{sala2}/token", {"tokenEntrada": ent2["tokenEntrada"]})  # entra na espera
+    api(base, f"/api/consultas/{ag2['consultaId']}/aceite", None, auth)
+    st, pac2 = api(base, f"/api/salas/{sala2}/token", {"tokenEntrada": ent2["tokenEntrada"]})
+    conferir("paciente recebe o JWT (sala em que o médico não entra)", st == 200 and "jwt" in pac2)
+
+    r_so, x_so = verify_auth.entrar(sala2, pac2["jwt"], "paciente")
+    conferir("Prosody aceita o paciente sozinho", r_so == "ACEITO", r_so)
+    p_so = papel(x_so, "paciente")
+    conferir("paciente SOZINHO não é promovido a moderador",
+             p_so is not None and p_so[1] != "moderator" and p_so[0] != "owner", str(p_so))
+    # O cenário "médico sai, paciente é promovido" e a reentrada estão em verify_moderador.py (sessões persistentes).
+
     sys.exit(1 if falhas else 0)
 
 

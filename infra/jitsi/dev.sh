@@ -67,7 +67,12 @@ case "${1:-}" in
     mkdir -p "$cfg"/{web/custom-ca,storage/web,storage/transcripts,tmp/web-load-test,prosody/config,prosody/prosody-plugins-custom,jicofo,jvb,jigasi,jibri}
     echo ".env criado. Rode ./dev.sh up"
     ;;
-  up)   instalar_regras_jitsi; ajustar_permissoes; "${COMPOSE[@]}" up -d web prosody jicofo jvb ;;
+  up)
+    # Segurança do papel (T07): garante as chaves num .env criado antes delas existirem (senão o paciente viraria
+    # moderador). up -d recria o jicofo quando o .env muda; a linha só é acrescentada se faltar.
+    grep -q '^JICOFO_ENABLE_AUTH=' .env || echo 'JICOFO_ENABLE_AUTH=0' >> .env
+    grep -q '^ENABLE_AUTO_OWNER=' .env || echo 'ENABLE_AUTO_OWNER=false' >> .env
+    instalar_regras_jitsi; ajustar_permissoes; "${COMPOSE[@]}" up -d web prosody jicofo jvb ;;
   down) "${COMPOSE[@]}" down ;;
   logs) "${COMPOSE[@]}" logs -f --tail=100 ;;
   env)

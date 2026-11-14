@@ -401,6 +401,7 @@ O `./dev.sh init` gera o arquivo a partir de `.env.example`. Principais chaves:
 | `JWT_APP_ID`, `JWT_APP_SECRET`, `JWT_ACCEPTED_ISSUERS`, `JWT_ACCEPTED_AUDIENCES` | Validação do JWT emitido pelo backend |
 | `XMPP_DOMAIN` | Domínio XMPP interno (não é DNS); precisa casar com `medilink.jitsi.xmpp-domain` |
 | `XMPP_MUC_MODULES` | Módulos do componente MUC: `token_affiliation` (papel de moderador pelo token) e `medilink_transcription` |
+| `JICOFO_ENABLE_AUTH=0`, `ENABLE_AUTO_OWNER=false` | **Segurança do papel (T07):** o moderador vem só do token. Sem `JICOFO_ENABLE_AUTH=0`, o Jicofo herda `ENABLE_AUTH=1`, habilita a própria autenticação JWT e concede moderador a qualquer participante autenticado (o paciente viraria moderador e poderia encerrar a reunião para todos); sem `ENABLE_AUTO_OWNER=false`, o Jicofo promove a owner o primeiro ocupante quando a sala fica sem moderador (o paciente sozinho) |
 | `ENABLE_LOBBY` | Mantido, mas o aceite do paciente é feito no backend (ver [decisões](#decisões-de-arquitetura)) |
 | `ENABLE_P2P=0` | Toda a mídia passa pelo JVB (necessário para a captura no servidor) |
 | `CSP_HEADER` | Quem pode embutir a interface do Jitsi (a origem do MediLink) |
@@ -1017,7 +1018,7 @@ O Jitsi roda em Docker a partir do `infra/jitsi/docker-compose.yml` (cópia **se
    | `JITSI_IMAGE_VERSION` | mantenha **fixa** (`stable-11248-2` nos testes); só atualize depois de testar |
    | `TZ` | `America/Sao_Paulo` |
 
-   Mantenha como estão: `AUTH_TYPE=jwt`, `ENABLE_AUTH=1`, `ENABLE_GUESTS=0`, `JWT_ACCEPTED_ISSUERS=medilink`, `JWT_ACCEPTED_AUDIENCES=jitsi`, `XMPP_DOMAIN=meet.jitsi`, `XMPP_MUC_MODULES=token_affiliation,medilink_transcription`, `ENABLE_P2P=0`, `ENABLE_WELCOME_PAGE=0`, `ENABLE_HTTP_REDIRECT=1`, `DISABLE_POLLS=1`, `ENABLE_BREAKOUT_ROOMS=0`.
+   Mantenha como estão: `AUTH_TYPE=jwt`, `ENABLE_AUTH=1`, `ENABLE_GUESTS=0`, `JWT_ACCEPTED_ISSUERS=medilink`, `JWT_ACCEPTED_AUDIENCES=jitsi`, `XMPP_DOMAIN=meet.jitsi`, `XMPP_MUC_MODULES=token_affiliation,medilink_transcription`, **`JICOFO_ENABLE_AUTH=0`**, **`ENABLE_AUTO_OWNER=false`**, `ENABLE_P2P=0`, `ENABLE_WELCOME_PAGE=0`, `ENABLE_HTTP_REDIRECT=1`, `DISABLE_POLLS=1`, `ENABLE_BREAKOUT_ROOMS=0`. As duas em negrito garantem que **só o médico seja moderador**: sem elas, o paciente pode virar moderador, encerrar a reunião para todos e ganhar moderação ao reentrar.
 3. **Instale as customizações do MediLink** e suba. `./dev.sh up` faz tudo de uma vez; o equivalente manual (com `CONFIG` já definido) é:
 
    ```bash
@@ -1335,6 +1336,7 @@ O MediLink **não constrói imagens próprias**: usa as imagens oficiais do Jits
 | Prosody (módulos) | Papel de moderador e exportação de áudio | `XMPP_MUC_MODULES=token_affiliation,medilink_transcription` | O JWT define quem modera; toda sala é marcada para exportar áudio |
 | Prosody (plugin Lua) | `mod_medilink_transcription` | `infra/jitsi/prosody-plugins/` → `${CONFIG}/prosody/prosody-plugins-custom/` (montado em `/prosody-plugins-custom`) | Marca `asyncTranscription=true` e `transcription.urlParams.sala` em toda sala nova |
 | **Jicofo** | Destino do áudio | `infra/jitsi/custom-jicofo.conf.template` → `${CONFIG}/jicofo/custom-jicofo.conf` (gerado com `SINK_WS_URL` e `SINK_TOKEN`) | `jicofo.transcription.url-template` e cabeçalho `Authorization: Bearer` |
+| **Jicofo** | Papel de moderador só pelo token | `JICOFO_ENABLE_AUTH=0`, `ENABLE_AUTO_OWNER=false` | Desliga a autenticação do Jicofo e o auto-owner, senão o paciente vira moderador e encerra a reunião para todos |
 | **JVB** | Mídia sempre pelo servidor | `ENABLE_P2P=0`, `JVB_ADVERTISE_IPS`, UDP `10000` | O áudio de cada participante chega ao JVB (e daí ao sink); CA privada em `${CONFIG}/jvb/custom-ca` |
 | **Redpanda / Kafka** | Tópicos e retenção | `medilink.transcricao.jobs` e `.resultados`, `retention.ms=86400000`; ajustado pelo backend na subida | O texto da consulta não fica no broker além de 24 h |
 | Redpanda / Kafka | TLS | listener TLS do broker; truststore no backend e CA no worker | Tráfego da fila cifrado (⚠ não exercitado) |
@@ -1418,7 +1420,8 @@ Scripts de verificação contra o Prosody real (precisam do Jitsi e do backend e
 | Script | O que prova |
 | --- | --- |
 | `infra/jitsi/verify_auth.py` | Sem token, com token inválido, adulterado ou de outra sala não entra |
-| `infra/jitsi/verify_t07.py` | Médico entra como moderador e paciente sem moderação |
+| `infra/jitsi/verify_t07.py` | Médico entra como moderador e paciente sem moderação (inclusive o paciente sozinho) |
+| `infra/jitsi/verify_moderador.py` | Segurança do papel: o paciente **nunca** vira moderador — nem quando o médico sai, nem ao reentrar (os dois não podem encerrar a reunião para todos nem ganhar moderação) |
 | `infra/jitsi/verify_t08.py` | O paciente só entra depois do aceite, mesmo chegando antes do médico |
 | `infra/jitsi/e2e/verify_t11.py` | Com consentimento grava um Ogg Opus (cifrado no disco) por participante, nada antes do aceite; quem recusa o termo não chega à espera e nada é gravado |
 | `infra/jitsi/e2e/verify_t12.py` | Médico e paciente falam trechos diferentes em português; o texto chega ao tópico com o locutor certo e na ordem certa |
