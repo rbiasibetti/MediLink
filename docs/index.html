@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MediLink — Manual do Usuário</title>
+<style>
+  :root {
+    --azul: #4e73df; --azul-escuro: #224abe; --texto: #2b2d33; --muted: #6b6f76;
+    --fundo: #f6f7fb; --superficie: #ffffff; --borda: #e3e6ec; --ok: #1cc88a; --alerta: #e74a3b;
+    --marca: #fff3cd; --codigo: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --texto: #e4e6eb; --muted: #9aa0a8; --fundo: #15171c; --superficie: #1e2128;
+      --borda: #30343d; --marca: #4a3f17; --codigo: #262a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body { margin: 0; font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--texto); background: var(--fundo); }
+  .layout { display: flex; min-height: 100vh; }
+
+  nav.indice { width: 300px; flex: 0 0 300px; background: linear-gradient(180deg, var(--azul) 0%, var(--azul-escuro) 100%); color: #fff; padding: 24px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  nav.indice .logo { font-size: 1.3rem; font-weight: 700; padding: 0 20px 14px; border-bottom: 1px solid rgba(255,255,255,.25); margin-bottom: 14px; }
+  nav.indice .logo small { display: block; font-size: .75rem; font-weight: 400; opacity: .8; }
+  nav.indice a { display: block; color: rgba(255,255,255,.88); text-decoration: none; padding: 6px 20px; font-size: .92rem; border-left: 3px solid transparent; }
+  nav.indice a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  nav.indice a.cap { font-weight: 700; margin-top: 10px; font-size: .98rem; }
+  nav.indice a.sub { padding-left: 34px; font-size: .85rem; }
+
+  main { flex: 1; min-width: 0; padding: 40px clamp(16px, 5vw, 72px) 80px; max-width: 1020px; }
+  h1 { font-size: 2rem; margin: 0 0 6px; color: var(--azul); }
+  h2 { font-size: 1.5rem; margin: 56px 0 10px; padding-top: 18px; border-top: 2px solid var(--borda); color: var(--azul); }
+  h3 { font-size: 1.12rem; margin: 30px 0 8px; }
+  p, li { max-width: 78ch; }
+  .muted { color: var(--muted); }
+  a { color: var(--azul); }
+  code { background: var(--codigo); border-radius: 4px; padding: 1px 6px; font-size: .88em; }
+  mark { background: var(--marca); color: inherit; border-radius: 3px; padding: 0 3px; }
+
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: .93rem; background: var(--superficie); border: 1px solid var(--borda); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+  th { background: color-mix(in srgb, var(--azul) 8%, var(--superficie)); }
+  tr:last-child td { border-bottom: 0; }
+
+  figure { margin: 22px auto; text-align: center; }
+  figure img { max-width: min(100%, 780px); border: 1px solid var(--borda); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.08); background: #fff; cursor: zoom-in; }
+  figure.celular img { max-width: min(100%, 300px); }
+  figcaption { font-size: .85rem; color: var(--muted); margin-top: 8px; }
+
+  .aviso, .dica { border-left: 4px solid var(--alerta); background: var(--superficie); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 16px 0; max-width: 80ch; }
+  .dica { border-left-color: var(--ok); }
+  .aviso strong:first-child, .dica strong:first-child { display: inline-block; }
+  kbd.bt { display: inline-block; border: 1px solid var(--borda); background: var(--superficie); border-radius: 6px; padding: 0 8px; font: inherit; font-size: .88em; box-shadow: 0 1px 0 var(--borda); white-space: nowrap; }
+  .icone { display: inline-block; min-width: 1.4em; text-align: center; }
+
+  .topo-pagina { position: fixed; right: 18px; bottom: 18px; background: var(--azul); color: #fff; border-radius: 999px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 1.2rem; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+
+  /* zoom das imagens */
+  dialog#zoom { border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 96vh; }
+  dialog#zoom::backdrop { background: rgba(0,0,0,.75); }
+  dialog#zoom img { max-width: 96vw; max-height: 92vh; border-radius: 8px; cursor: zoom-out; }
+
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    nav.indice { width: 100%; flex: none; position: static; height: auto; max-height: none; padding: 12px 0; }
+    nav.indice a.sub { display: none; }
+    main { padding: 24px 16px 60px; }
+  }
+  @media print {
+    nav.indice, .topo-pagina { display: none; }
+    main { max-width: none; padding: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="indice" aria-label="Índice do manual">
+  <div class="logo">MediLink<small>Manual do Usuário</small></div>
+  <a class="cap" href="#visao-geral">Visão geral</a>
+  <a class="cap" href="#paciente">1. Paciente</a>
+  <a class="sub" href="#p-antes">1.1 Antes da consulta</a>
+  <a class="sub" href="#p-link">1.2 Abrir o link</a>
+  <a class="sub" href="#p-cpf">1.3 Confirmar o CPF</a>
+  <a class="sub" href="#p-termo">1.4 Ler e aceitar o termo</a>
+  <a class="sub" href="#p-espera">1.5 Sala de espera</a>
+  <a class="sub" href="#p-durante">1.6 Durante e depois da consulta</a>
+  <a class="sub" href="#p-faq">1.7 Perguntas frequentes</a>
+  <a class="cap" href="#medico">2. Médico</a>
+  <a class="sub" href="#m-login">2.1 Entrar com e-mail e senha</a>
+  <a class="sub" href="#m-totp">2.2 Autenticador (TOTP)</a>
+  <a class="sub" href="#m-consultas">2.3 Minhas consultas</a>
+  <a class="sub" href="#m-link">2.4 Rever o link do paciente</a>
+  <a class="sub" href="#m-cancelar">2.5 Cancelar uma consulta</a>
+  <a class="sub" href="#m-agendar">2.6 Agendar uma consulta</a>
+  <a class="sub" href="#m-atender">2.7 Atender e encerrar</a>
+  <a class="sub" href="#m-transcricao">2.8 Ver a transcrição</a>
+  <a class="sub" href="#m-acesso-unico">2.9 Link de uso único</a>
+  <a class="sub" href="#m-problemas">2.10 Problemas comuns</a>
+  <a class="cap" href="#admin">3. Administrador</a>
+  <a class="sub" href="#a-login">3.1 Entrar na administração</a>
+  <a class="sub" href="#a-andamento">3.2 Andamento (gráficos)</a>
+  <a class="sub" href="#a-medicos">3.3 Médicos</a>
+  <a class="sub" href="#a-sistemas">3.4 Sistemas e keys</a>
+  <a class="sub" href="#a-termo">3.5 Termo de consentimento</a>
+  <a class="sub" href="#a-webhooks">3.6 Webhooks</a>
+  <a class="sub" href="#a-smtp">3.7 Envio de e-mail (SMTP)</a>
+  <a class="sub" href="#a-rotinas">3.8 Rotinas e segurança</a>
+  <a class="sub" href="#a-problemas">3.9 Problemas comuns</a>
+</nav>
+
+<main>
+<h1 id="visao-geral">MediLink — Manual do Usuário</h1>
+<p class="muted">Plataforma de telemedicina auto-hospedada: consultas por vídeo com registro do áudio, transcrição automática e integração com os sistemas da clínica.</p>
+
+<p>Este manual cobre as três áreas da aplicação web:</p>
+<table>
+  <tr><th>Área</th><th>Quem usa</th><th>Endereço</th></tr>
+  <tr><td><a href="#paciente">Paciente</a></td><td>Quem é atendido. Não precisa de conta: só do link da consulta.</td><td><code>https://…/sala/consulta-…</code></td></tr>
+  <tr><td><a href="#medico">Médico</a></td><td>Quem atende: lista de consultas, agendamento, sala e transcrições.</td><td><code>https://…/medico</code></td></tr>
+  <tr><td><a href="#admin">Administrador</a></td><td>Quem administra: médicos, sistemas integrados, termo, webhooks e e-mail.</td><td><code>https://…/admin</code></td></tr>
+</table>
+<p class="muted">As imagens deste manual foram geradas no ambiente de demonstração, com dados fictícios. Clique em qualquer imagem para ampliá-la.</p>
+
+<!-- ============================================================ PACIENTE -->
+<h2 id="paciente">1. Paciente</h2>
+<p>Esta parte é para quem vai <strong>ser atendido</strong> por vídeo. Você não precisa instalar nada nem criar conta: basta o <strong>link da consulta</strong>, que chega por e-mail ou pelo consultório.</p>
+
+<h3 id="p-antes">1.1 Antes da consulta</h3>
+<ul>
+  <li>Tenha o <strong>link</strong> em mãos. Ele é só seu: <strong>não compartilhe</strong>.</li>
+  <li>Se o consultório pediu a confirmação do CPF, tenha o seu CPF à mão.</li>
+  <li>Use um navegador atualizado, no computador ou no celular, com boa internet e pouco barulho.</li>
+  <li>Na primeira vez o navegador pergunta se o site pode usar <strong>câmera e microfone</strong>: escolha <kbd class="bt">Permitir</kbd>. Sem isso o médico não vê nem ouve você.</li>
+  <li>Entre alguns minutos antes do horário: quem chega cedo fica na sala de espera.</li>
+</ul>
+
+<h3 id="p-link">1.2 Abrir o link</h3>
+<p>Toque ou clique no link recebido (formato <code>https://…/sala/consulta-…</code>). Se aparecer a mensagem abaixo, o link está errado, foi cortado ao copiar ou a consulta foi cancelada: confira o link na mensagem original ou fale com o consultório.</p>
+<figure class="celular"><img src="manual/img/p00-link-invalido.png" alt="Tela 'Consulta não encontrada'"><figcaption>Figura 1. Link inválido ou consulta cancelada.</figcaption></figure>
+
+<h3 id="p-cpf">1.3 Confirmar o CPF</h3>
+<p>Para proteger a sua privacidade, o sistema pode pedir o seu <strong>CPF</strong> antes de deixar você entrar. A tela mostra o nome do médico, o dia e a hora da consulta.</p>
+<figure class="celular"><img src="manual/img/p01-confirmar-cpf.png" alt="Tela 'Sua teleconsulta' pedindo o CPF"><figcaption>Figura 2. Confirmação do CPF.</figcaption></figure>
+<ol>
+  <li>Digite os 11 números do CPF (com ou sem pontos e traço).</li>
+  <li>Toque em <kbd class="bt">Continuar</kbd>.</li>
+</ol>
+<p>Se o CPF não conferir, aparece um aviso e você pode tentar de novo:</p>
+<figure class="celular"><img src="manual/img/p02-cpf-incorreto.png" alt="Mensagem de CPF não confirmado"><figcaption>Figura 3. CPF não confirmado.</figcaption></figure>
+<div class="aviso"><strong>Importante.</strong> Por segurança, a mensagem é sempre a mesma, seja o CPF errado, seja o link de outra pessoa. Depois de <strong>5 tentativas erradas em 15 minutos</strong> o acesso é pausado por alguns minutos. Se você tem certeza de que digitou certo e continua sem entrar, fale com o consultório: o CPF cadastrado na consulta pode estar diferente.</div>
+<p class="muted">Se o consultório não exigir o CPF, esta etapa não aparece e você vai direto ao termo.</p>
+
+<h3 id="p-termo">1.4 Ler e aceitar o termo</h3>
+<p>Toda teleconsulta é <strong>registrada</strong>. Antes de entrar, você lê o <strong>termo de consentimento</strong> e decide.</p>
+<figure class="celular"><img src="manual/img/p03-termo.png" alt="Termo de consentimento com os botões 'Li e aceito' e 'Não aceito'"><figcaption>Figura 4. Termo de consentimento (role o texto para ler tudo).</figcaption></figure>
+<p>O termo explica, em linguagem simples:</p>
+<ul>
+  <li><strong>O que é captado:</strong> somente o <strong>áudio</strong>. O <strong>vídeo não é gravado</strong>.</li>
+  <li><strong>Para que serve:</strong> depois da consulta o áudio vira texto, que documenta o atendimento e faz parte do seu prontuário.</li>
+  <li><strong>O que acontece com o áudio:</strong> assim que o texto estiver salvo, o arquivo de áudio é <strong>apagado</strong>. Só o texto é mantido.</li>
+  <li><strong>Quem acessa:</strong> o profissional responsável pelo seu atendimento, na infraestrutura do próprio serviço, sem envio a terceiros.</li>
+  <li><strong>Sua escolha:</strong> você pode <strong>retirar o consentimento a qualquer momento</strong>.</li>
+</ul>
+<table>
+  <tr><th>Botão</th><th>O que acontece</th></tr>
+  <tr><td><kbd class="bt">Li e aceito</kbd></td><td>O consentimento é registrado e você segue para a sala de espera.</td></tr>
+  <tr><td><kbd class="bt">Não aceito</kbd></td><td>A consulta <strong>por vídeo não pode ser feita</strong>, porque toda consulta é registrada. Você vê uma tela explicando isso e pode <strong>ler o termo novamente</strong> se mudar de ideia. Combine outra forma de atendimento com o consultório.</td></tr>
+</table>
+<p class="muted">Se aparecer “O termo foi atualizado. Recarregue a página para lê-lo.”, recarregue a página e leia a nova versão.</p>
+
+<h3 id="p-espera">1.5 Aguardar na sala de espera</h3>
+<p>Depois de aceitar, você fica na <strong>sala de espera</strong> até o médico liberar a sua entrada.</p>
+<figure class="celular"><img src="manual/img/p04-sala-de-espera.png" alt="Tela 'Sala de espera'"><figcaption>Figura 5. Sala de espera.</figcaption></figure>
+<ul>
+  <li><strong>Mantenha a página aberta.</strong> Ela avisa sozinha quando o médico aceitar você; não precisa atualizar.</li>
+  <li>Se o celular bloquear a tela por muito tempo, volte à página para continuar.</li>
+  <li>O médico só vê você na lista depois que você aceita o termo.</li>
+</ul>
+
+<h3 id="p-durante">1.6 Durante e depois da consulta</h3>
+<p>Quando o médico aceita, a sala de vídeo abre. No alto aparece o aviso <mark>Consulta registrada, com a sua autorização</mark> e o link <strong>Retirar consentimento e sair</strong>. A barra da sala (ela aparece ao tocar ou mover o mouse sobre o vídeo) tem os controles de microfone, câmera, supressão de ruído, qualidade do vídeo, tela cheia e o botão vermelho de desligar. Não há chat nem compartilhamento de tela: a sala é só entre você e o médico.</p>
+<ul>
+  <li><strong>Sair sem encerrar:</strong> use o botão vermelho <strong>Desligar</strong>. Você vê “Você saiu da consulta” e pode tocar em <kbd class="bt">Voltar para a sala</kbd> enquanto a consulta estiver aberta.</li>
+  <li><strong>Retirar o consentimento:</strong> toque em <strong>Retirar consentimento e sair</strong>. A captação do áudio é <strong>interrompida</strong> e a sua participação é encerrada (tela “Consentimento retirado”). O que já foi registrado é mantido pelo prazo legal.</li>
+  <li><strong>Sessão expirada:</strong> se você ficar muito tempo parado antes de entrar (cerca de 10 minutos), toque em <kbd class="bt">Confirmar novamente</kbd> e repita o CPF.</li>
+  <li><strong>Quando o médico encerra</strong>, a sala fecha; pode fechar a página.</li>
+</ul>
+<div class="dica"><strong>Dicas.</strong> Se a imagem travar, desligue a câmera por um instante ou reduza a qualidade do vídeo. Fale em ritmo natural e uma pessoa por vez: isso melhora o texto da transcrição.</div>
+
+<h3 id="p-faq">1.7 Perguntas frequentes</h3>
+<table>
+  <tr><th>Pergunta</th><th>Resposta</th></tr>
+  <tr><td>O vídeo é gravado?</td><td>Não. Só o áudio é captado, e é apagado depois que vira texto.</td></tr>
+  <tr><td>Preciso de conta ou aplicativo?</td><td>Não. O link e um navegador bastam.</td></tr>
+  <tr><td>Microfone ou câmera não funcionam</td><td>Toque no cadeado ao lado do endereço, libere câmera e microfone e recarregue a página. Feche outros aplicativos que usem a câmera.</td></tr>
+  <tr><td>Posso usar o celular?</td><td>Sim. As telas se adaptam. Deixe-o apoiado, com a página aberta e a tela ligada.</td></tr>
+  <tr><td>O médico não me aceita</td><td>Se aparece “Sala de espera”, aguarde: ele ainda não liberou. Se passar do horário, fale com o consultório.</td></tr>
+  <tr><td>Perdi o link</td><td>Peça um novo ao consultório. Cada consulta tem um link único, que deixa de valer um dia depois do horário se a consulta não começou.</td></tr>
+</table>
+
+<!-- ============================================================ MÉDICO -->
+<h2 id="medico">2. Médico</h2>
+<p>Esta parte é para quem <strong>atende</strong> pela plataforma. Há duas formas de entrar:</p>
+<table>
+  <tr><th>Forma de entrar</th><th>Como é</th><th>O que você vê</th></tr>
+  <tr><td><strong>Com e-mail e senha</strong></td><td>O administrador cadastra você e lhe passa a senha inicial.</td><td>Todas as suas consultas, a agenda e as transcrições.</td></tr>
+  <tr><td><strong>Pelo link de uso único</strong></td><td>O sistema de agenda/prontuário da clínica gera um link na hora de iniciar a consulta.</td><td>Só aquela consulta (sala e transcrição).</td></tr>
+</table>
+
+<h3 id="m-login">2.1 Entrar com e-mail e senha</h3>
+<p>Abra o endereço da plataforma (por exemplo <code>https://app.suaclinica.com.br/medico</code>), digite o e-mail cadastrado pelo administrador e a senha, e clique em <kbd class="bt">Entrar</kbd>.</p>
+<figure><img src="manual/img/m01-login.png" alt="Tela 'Acesso do médico' com e-mail e senha"><figcaption>Figura 6. Acesso do médico.</figcaption></figure>
+<p>Se o e-mail ou a senha não conferirem, aparece uma mensagem de erro — por segurança, sempre a mesma, tanto para senha errada quanto para e-mail não cadastrado.</p>
+<figure><img src="manual/img/m02-login-recusado.png" alt="Mensagem de erro de login"><figcaption>Figura 7. Não foi possível entrar.</figcaption></figure>
+<div class="aviso"><strong>Atenção.</strong> Depois de <strong>5 tentativas erradas</strong> o acesso é bloqueado por cerca de 15 minutos. Se esqueceu a senha, peça ao administrador para <strong>redefinir</strong>: não há “esqueci minha senha” por e-mail. A sessão dura cerca de 8 horas.</div>
+
+<h3 id="m-totp">2.2 Autenticador (TOTP), quando exigido</h3>
+<p>O administrador pode exigir um <strong>código do aplicativo autenticador</strong> além da senha. <strong>No primeiro acesso</strong>, depois de digitar e-mail e senha, a tela mostra um <strong>segredo</strong> para cadastrar no autenticador:</p>
+<figure><img src="manual/img/m03-login-totp-primeiro-acesso.png" alt="Primeiro acesso com segredo do autenticador"><figcaption>Figura 8. Primeiro acesso com TOTP: cadastre o segredo no aplicativo.</figcaption></figure>
+<ol>
+  <li>No celular, abra o autenticador e escolha <strong>adicionar conta</strong> (tipo “baseado em tempo”, 6 dígitos).</li>
+  <li>Informe o segredo mostrado na tela (ou use o endereço <code>otpauth://…</code> para gerar um QR Code).</li>
+  <li>Digite o <strong>código de 6 dígitos</strong> no campo e clique em <kbd class="bt">Entrar</kbd>.</li>
+</ol>
+<p>Nos próximos acessos, informe e-mail, senha <strong>e</strong> o código do momento. Cada código vale uma vez: se o login falhar, espere o código seguinte. Trocou de celular? Peça ao administrador <strong>Refazer cadastro do TOTP</strong>.</p>
+
+<h3 id="m-consultas">2.3 Minhas consultas</h3>
+<p>É a sua tela inicial. O <strong>menu lateral</strong> dá acesso a <strong>Minhas consultas</strong>, <strong>Agendar consulta</strong> e <strong>Sair</strong>. A lista mostra as consultas <strong>só suas</strong>, com filtro por situação e paginação (<kbd class="bt">Anterior</kbd> / <kbd class="bt">Próxima</kbd>, 20 por página).</p>
+<figure><img src="manual/img/m04-minhas-consultas.png" alt="Lista 'Minhas consultas' com menu lateral e ícones de ação"><figcaption>Figura 9. Minhas consultas.</figcaption></figure>
+<table>
+  <tr><th>Coluna</th><th>O que mostra</th></tr>
+  <tr><td><strong>Data</strong></td><td>Dia e hora marcados.</td></tr>
+  <tr><td><strong>Paciente</strong></td><td>Nome do paciente.</td></tr>
+  <tr><td><strong>Situação</strong></td><td><strong>Agendada</strong>, <strong>Paciente aguardando</strong>, <strong>Em andamento</strong>, <strong>Encerrada</strong> ou <strong>Cancelada</strong>.</td></tr>
+  <tr><td><strong>Transcrição</strong></td><td><strong>—</strong> (ainda não se aplica), <strong>Em processamento</strong>, <strong>Disponível</strong>, <strong>Sem áudio</strong>, <strong>Falhou</strong> ou <strong>Expirada</strong>.</td></tr>
+</table>
+<p>As <strong>ações de cada linha</strong> são ícones (passe o mouse para ver o nome):</p>
+<table>
+  <tr><th>Ícone</th><th>Ação</th><th>Quando aparece</th></tr>
+  <tr><td class="icone">🎥</td><td><strong>Entrar na sala</strong></td><td>Consulta agendada, com paciente aguardando ou em andamento.</td></tr>
+  <tr><td class="icone">🔗</td><td><strong>Rever o link do paciente</strong></td><td>Idem: reabre o link para reenviar ao paciente (<a href="#m-link">2.4</a>).</td></tr>
+  <tr><td class="icone">✕</td><td><strong>Cancelar consulta</strong></td><td>Idem, enquanto a consulta ainda não começou (<a href="#m-cancelar">2.5</a>).</td></tr>
+  <tr><td class="icone">📄</td><td><strong>Ver a transcrição</strong></td><td>Transcrição disponível ou em processamento, se a leitura estiver habilitada na plataforma.</td></tr>
+</table>
+<p class="muted">A lista nunca mostra o texto da transcrição nem o CPF: ela só informa a situação. Cada leitura de transcrição é registrada em auditoria.</p>
+
+<h3 id="m-link">2.4 Rever o link do paciente</h3>
+<p>Perdeu a mensagem com o link, ou o paciente não a recebeu? Clique no ícone <strong>Rever o link do paciente</strong> na linha da consulta. Um aviso mostra o link para você <kbd class="bt">Copiar link</kbd> e enviar por onde preferir.</p>
+<figure><img src="manual/img/m14-link-do-paciente.png" alt="Janela 'Link do paciente' com o botão Copiar link"><figcaption>Figura 10. Rever o link do paciente.</figcaption></figure>
+<div class="aviso"><strong>O link é pessoal.</strong> Envie-o apenas ao paciente daquela consulta, por um canal seguro. Quem tem o link (e o CPF, quando exigido) entra na consulta.</div>
+
+<h3 id="m-cancelar">2.5 Cancelar uma consulta agendada</h3>
+<p>Clique no ícone <strong>Cancelar consulta</strong> na linha. A plataforma pede a confirmação antes de cancelar:</p>
+<figure><img src="manual/img/m15-cancelar-consulta.png" alt="Janela de confirmação do cancelamento"><figcaption>Figura 11. Confirmação do cancelamento.</figcaption></figure>
+<ul>
+  <li><kbd class="bt">Cancelar a consulta</kbd> confirma: o <strong>link do paciente deixa de funcionar</strong> e a linha passa a mostrar <strong>Cancelada</strong>.</li>
+  <li><kbd class="bt">Voltar</kbd> fecha sem cancelar.</li>
+  <li>Só é possível cancelar <strong>antes de a consulta começar</strong>. Se o paciente já entrou, aparece “A consulta já começou e não pode mais ser cancelada.”</li>
+</ul>
+<figure><img src="manual/img/m16-consulta-cancelada.png" alt="Lista com a consulta cancelada e o aviso de confirmação"><figcaption>Figura 12. Consulta cancelada na lista.</figcaption></figure>
+
+<h3 id="m-agendar">2.6 Agendar uma consulta</h3>
+<p>Clique em <strong>Agendar consulta</strong> no menu lateral.</p>
+<figure><img src="manual/img/m05-novo-agendamento.png" alt="Formulário Novo agendamento"><figcaption>Figura 13. Novo agendamento.</figcaption></figure>
+<table>
+  <tr><th>Campo</th><th>Observação</th></tr>
+  <tr><td><strong>Nome do paciente</strong></td><td>Obrigatório.</td></tr>
+  <tr><td><strong>CPF do paciente</strong></td><td>Obrigatório neste formulário.</td></tr>
+  <tr><td><strong>E-mail do paciente</strong></td><td>Opcional. Com ele você pode enviar o link por e-mail com um clique.</td></tr>
+  <tr><td><strong>Data e hora</strong></td><td>Obrigatório. Use data e horário futuros.</td></tr>
+  <tr><td><strong>Exigir confirmação do CPF</strong></td><td>Marcado: o paciente digita o CPF para entrar. Desmarcado: vai direto ao termo.</td></tr>
+</table>
+<p>Clique em <kbd class="bt">Agendar</kbd>. A tela passa a mostrar o <strong>link da consulta</strong>:</p>
+<figure><img src="manual/img/m06-agendamento-criado.png" alt="Agendamento criado com o link"><figcaption>Figura 14. Agendamento criado.</figcaption></figure>
+<ul>
+  <li><kbd class="bt">Copiar link</kbd> copia o endereço para enviar ao paciente por onde preferir.</li>
+  <li><kbd class="bt">Enviar por e-mail</kbd> envia o link ao e-mail do paciente (ativo se você o informou; o administrador precisa ter configurado o <a href="#a-smtp">envio de e-mail</a>).</li>
+  <li><kbd class="bt">Entrar na sala</kbd> abre a sala dessa consulta.</li>
+</ul>
+<p class="muted">O link é único e fixo: pode ser reutilizado, e deixa de valer 24 horas depois do horário se a consulta não tiver começado. Em clínicas com sistema de agenda integrado este formulário pode não estar em uso: as consultas já chegam à sua lista.</p>
+
+<h3 id="m-atender">2.7 Atender e encerrar</h3>
+<p>Na lista, clique em <strong>Entrar na sala</strong> (ícone de câmera). A tela da consulta mostra a sala de vídeo e uma <strong>barra de estado</strong> no alto:</p>
+<table>
+  <tr><th>Mensagem</th><th>Significa</th><th>O que fazer</th></tr>
+  <tr><td><strong>Aguardando o paciente chegar…</strong></td><td>Ninguém na espera ainda.</td><td>Aguarde. Não é possível aceitar quem ainda não chegou.</td></tr>
+  <tr><td><strong>Paciente aguardando</strong></td><td>O paciente confirmou o CPF e <strong>aceitou o termo</strong>.</td><td>Aguarde o botão ficar ativo (“Preparando a sala…”) e clique em <kbd class="bt">Aceitar paciente</kbd>.</td></tr>
+  <tr><td><strong>Consulta em andamento</strong> · <em>Consulta sendo registrada, com o consentimento do paciente</em></td><td>O registro do áudio começou sozinho.</td><td>Atenda normalmente; você não precisa fazer nada.</td></tr>
+  <tr><td><strong>Atenção: esta consulta não está sendo registrada (o paciente retirou o consentimento).</strong></td><td>A captação parou e o paciente saiu.</td><td>Encerre a consulta. Sem consentimento não há consulta por vídeo.</td></tr>
+</table>
+<p><strong>Para encerrar</strong>, use o botão vermelho <strong>Desligar</strong> da barra da sala e escolha <strong>Terminar para todos</strong> (encerra para todos; indicado ao final do atendimento) ou <strong>Sair da reunião</strong> (só você sai). Nos dois casos a plataforma encerra a consulta quando você deixa a sala, e a tela passa a mostrar <strong>“Consulta encerrada”</strong>, com os botões:</p>
+<ul>
+  <li><kbd class="bt">Ver a transcrição</kbd> — abre a transcrição (disponível quando o processamento terminar).</li>
+  <li><kbd class="bt">Novo agendamento</kbd> e <kbd class="bt">Minhas consultas</kbd> — seguem para as outras telas.</li>
+  <li><kbd class="bt">Reabrir a consulta</kbd> — aparece <strong>por alguns minutos</strong> (padrão: 10) se você encerrou por engano ou a conexão caiu. O consentimento é mantido e o áudio já captado continua valendo.</li>
+</ul>
+<div class="dica"><strong>A transcrição demora.</strong> Por causa da janela de reabertura, o processamento só começa cerca de 10 minutos depois do encerramento, e leva ainda um tempo. Volte à lista mais tarde: a coluna <strong>Transcrição</strong> passa de “Em processamento” para “Disponível”.</div>
+
+<h3 id="m-transcricao">2.8 Ver a transcrição</h3>
+<p>Na lista, clique no ícone <strong>Ver a transcrição</strong>. A tela mostra o idioma, a duração e as <strong>falas em ordem</strong>, cada uma com o papel (Médico ou Paciente) e o instante em que começou.</p>
+<figure><img src="manual/img/m12-transcricao.png" alt="Transcrição com falas do médico e do paciente"><figcaption>Figura 15. Transcrição da consulta (texto de exemplo ilustrativo).</figcaption></figure>
+<table>
+  <tr><th>Mensagem</th><th>Significado</th></tr>
+  <tr><td>“A transcrição ainda está sendo gerada…”</td><td>Processamento em curso; a página se atualiza sozinha.</td></tr>
+  <tr><td>“A consulta ainda não foi encerrada.”</td><td>A transcrição só existe depois do encerramento.</td></tr>
+  <tr><td>“Esta consulta não teve áudio capturado…”</td><td>A captação não ocorreu. A plataforma registra o caso e o administrador investiga.</td></tr>
+  <tr><td>“A transcrição falhou e está sob análise.”</td><td>O processamento falhou; o administrador pode reprocessar.</td></tr>
+  <tr><td>“…não está mais disponível (prazo de retenção).”</td><td>Passou o prazo de guarda definido pela clínica.</td></tr>
+  <tr><td>“A leitura de transcrições por esta plataforma não está habilitada.”</td><td>Função desligada no servidor. Procure o administrador.</td></tr>
+</table>
+<div class="aviso"><strong>Confira antes de usar.</strong> A transcrição é automática e pode conter erros (nomes, termos técnicos, números). O texto fica <strong>cifrado</strong> no servidor e só você, como médico da consulta, o lê. Cada leitura fica registrada.</div>
+
+<h3 id="m-acesso-unico">2.9 Entrar pelo link de uso único</h3>
+<p>Em clínicas com sistema de agenda ou prontuário integrado, o sistema entrega a você um <strong>link na hora de iniciar a consulta</strong>, no formato <code>https://…/medico/acesso#t=…</code>. Clicando nele você entra direto na <strong>sala daquela consulta</strong>, sem senha.</p>
+<ul>
+  <li>O link vale <strong>uma vez</strong> e por <strong>poucos minutos</strong> (5, por padrão); só funciona perto do horário da consulta.</li>
+  <li>Com o link você vê <strong>só aquela consulta</strong>. Para ver as outras, use o login com e-mail e senha, se tiver um.</li>
+</ul>
+<p>Se o link já foi usado, venceu ou está errado, aparece:</p>
+<figure><img src="manual/img/m13-link-invalido.png" alt="Tela 'Link inválido ou expirado'"><figcaption>Figura 16. Link inválido ou expirado — peça ao sistema de origem para iniciar a consulta de novo.</figcaption></figure>
+
+<h3 id="m-problemas">2.10 Problemas comuns</h3>
+<table>
+  <tr><th>Problema</th><th>O que fazer</th></tr>
+  <tr><td>Não consigo entrar</td><td>Confira e-mail e senha. Se bloqueou, aguarde cerca de 15 minutos. Senha esquecida: peça ao administrador para redefinir.</td></tr>
+  <tr><td><kbd class="bt">Aceitar paciente</kbd> desabilitado</td><td>A sala ainda está sendo preparada. Aguarde alguns segundos.</td></tr>
+  <tr><td>O paciente não aparece</td><td>Ele precisa abrir o link, confirmar o CPF <strong>e aceitar o termo</strong>. Se recusou o termo, a consulta por vídeo não pode ser feita.</td></tr>
+  <tr><td>Não consigo cancelar</td><td>A consulta já começou. Cancelamento só antes do início.</td></tr>
+  <tr><td>Encerrei por engano</td><td>Clique em <kbd class="bt">Reabrir a consulta</kbd> em até 10 minutos.</td></tr>
+  <tr><td>A transcrição não aparece</td><td>Veja a coluna <strong>Transcrição</strong>. Em processamento, aguarde (no mínimo ~10 minutos). Sem áudio ou com falha, avise o administrador.</td></tr>
+</table>
+
+<!-- ============================================================ ADMIN -->
+<h2 id="admin">3. Administrador</h2>
+<p>Esta parte é para quem <strong>administra a plataforma</strong> na clínica: cadastra médicos, libera sistemas externos, mantém o termo de consentimento, configura o envio de e-mail e acompanha o funcionamento. A área administrativa <strong>não mostra dados de pacientes</strong>: só contagens e estados.</p>
+<p>Depois de entrar, o <strong>menu lateral</strong> tem as seções <strong>Andamento</strong>, <strong>Médicos</strong>, <strong>Sistemas e keys</strong>, <strong>Termo de consentimento</strong>, <strong>Webhooks</strong> e <strong>Envio de e-mail</strong>, além de <strong>Sair</strong>.</p>
+
+<h3 id="a-login">3.1 Entrar na administração</h3>
+<p>Abra <code>https://app.suaclinica.com.br/admin</code>. O acesso exige <strong>e-mail, senha e o código do autenticador (TOTP)</strong> — sempre.</p>
+<figure><img src="manual/img/a01-login.png" alt="Tela de login da administração"><figcaption>Figura 17. Login da administração.</figcaption></figure>
+<p><strong>Primeiro acesso.</strong> Digite o e-mail e a senha recebidos e clique em <kbd class="bt">Entrar</kbd>. Como o autenticador ainda não foi cadastrado, a tela mostra o segredo:</p>
+<figure><img src="manual/img/a02-primeiro-acesso-totp.png" alt="Primeiro acesso com segredo do autenticador"><figcaption>Figura 18. Primeiro acesso: cadastre o segredo no autenticador.</figcaption></figure>
+<ol>
+  <li>No autenticador do celular, adicione uma conta <strong>baseada em tempo</strong>, 6 dígitos.</li>
+  <li>Informe o <strong>segredo</strong> mostrado (ou use o endereço <code>otpauth://…</code> para o QR Code).</li>
+  <li>Digite o código de 6 dígitos e clique em <kbd class="bt">Entrar</kbd>.</li>
+</ol>
+<table>
+  <tr><th>Regra</th><th>Detalhe</th></tr>
+  <tr><td>Bloqueio</td><td><strong>5 tentativas erradas</strong> bloqueiam a conta por <strong>15 minutos</strong>.</td></tr>
+  <tr><td>Mensagem de erro</td><td>Sempre a mesma, para não revelar se o e-mail existe.</td></tr>
+  <tr><td>Duração da sessão</td><td><strong>30 minutos</strong>, só na memória da página: <strong>recarregar (F5) ou fechar a aba exige novo login</strong>.</td></tr>
+  <tr><td>Desativação</td><td>Se outro administrador desativar a sua conta, o acesso cai na hora.</td></tr>
+</table>
+
+<h3 id="a-andamento">3.2 Andamento: gráficos e incidentes</h3>
+<p>Mostra, em <strong>gráficos dinâmicos</strong>, o que está acontecendo na plataforma. Escolha o <strong>Período</strong> (7, 30 ou 90 dias) e clique em <kbd class="bt">Atualizar</kbd>. Passe o mouse sobre as fatias e barras para ver os valores; a legenda abaixo de cada gráfico traz os números exatos.</p>
+<figure><img src="manual/img/a03-painel-andamento.png" alt="Painel de andamento com gráficos de agendamentos, consultas, transcrição e webhooks"><figcaption>Figura 19. Andamento (dados de exemplo).</figcaption></figure>
+<table>
+  <tr><th>Quadro</th><th>O que mostra</th></tr>
+  <tr><td><strong>Agendamentos</strong></td><td>Quantos foram criados no período e a divisão entre <strong>agendados</strong> e <strong>cancelados</strong> (rosca).</td></tr>
+  <tr><td><strong>Consultas</strong></td><td>Quantas encerraram no período e quantas estão em cada situação (rosca).</td></tr>
+  <tr><td><strong>Transcrição</strong></td><td>Transcrições gravadas e a situação dos trabalhos (barras), além de <strong>quantos áudios ainda estão no disco</strong> e a data do mais antigo.</td></tr>
+  <tr><td><strong>Webhooks</strong></td><td>Entregas por situação: entregue, pendente, falha (rosca).</td></tr>
+  <tr><td><strong>Por sistema integrado</strong></td><td>Agendamentos de cada sistema, com <strong>paginação</strong>. “Médicos locais” agendam direto na plataforma.</td></tr>
+  <tr><td><strong>Incidentes</strong></td><td>Consultas que terminaram <strong>sem transcrição por motivo técnico</strong>, com <strong>paginação</strong>. Cada incidente deve ser investigado.</td></tr>
+</table>
+<p><strong>Como ler os sinais de alerta</strong></p>
+<table>
+  <tr><th>Sinal</th><th>Pode significar</th><th>O que fazer</th></tr>
+  <tr><td><strong>Áudio ainda no disco</strong> crescendo ou antigo</td><td>O serviço de transcrição está parado ou com falha.</td><td>Avise o responsável técnico. O áudio é apagado sozinho em até 7 dias, mas a transcrição não será gerada.</td></tr>
+  <tr><td>Incidente <code>SEM_AUDIO</code></td><td>A captação não ocorreu (queda de conexão, falha do vídeo).</td><td>Contate o médico e registre o caso. Não há como recuperar o áudio.</td></tr>
+  <tr><td>Incidente <code>FALHA_NO_WORKER</code> / <code>FALHA_NO_ENVIO</code></td><td>O processamento ou o envio falhou; o áudio foi mantido.</td><td>Clique em <strong>Reenviar</strong> (ícone de setas) na linha: o trabalho volta à fila.</td></tr>
+  <tr><td>Webhooks com <strong>FALHA</strong></td><td>O sistema de destino não respondeu corretamente.</td><td>Veja <a href="#a-webhooks">Webhooks</a>.</td></tr>
+</table>
+
+<h3 id="a-medicos">3.3 Médicos</h3>
+<p>Aqui você cadastra e mantém os médicos que entram com e-mail e senha.</p>
+<figure><img src="manual/img/a04-medicos-cadastro.png" alt="Formulário Novo médico preenchido"><figcaption>Figura 20. Novo médico.</figcaption></figure>
+<table>
+  <tr><th>Campo</th><th>Observação</th></tr>
+  <tr><td><strong>Nome</strong></td><td>Nome de exibição (aparece para o paciente).</td></tr>
+  <tr><td><strong>Registro profissional</strong></td><td>Por exemplo, <code>CRM-SP 123456</code>.</td></tr>
+  <tr><td><strong>E-mail</strong></td><td>É o <strong>usuário do login</strong>; não pode repetir.</td></tr>
+  <tr><td><strong>Senha inicial</strong></td><td>De <strong>12 a 128 caracteres</strong>. Entregue por canal seguro.</td></tr>
+  <tr><td><strong>Exigir TOTP no login</strong></td><td>Decisão sua, médico a médico.</td></tr>
+</table>
+<p>A lista tem <strong>campo de busca</strong> (nome, e-mail ou registro) e <strong>paginação</strong>:</p>
+<figure><img src="manual/img/a05-medicos-lista.png" alt="Lista de médicos com busca, paginação e ícones de ação"><figcaption>Figura 21. Lista de médicos.</figcaption></figure>
+<p><strong>Ações de cada linha</strong> (ícones; passe o mouse para ver o nome):</p>
+<table>
+  <tr><th>Ação</th><th>Efeito</th></tr>
+  <tr><td><strong>Desativar / Ativar</strong></td><td>Desativar corta o acesso <strong>na hora</strong>, inclusive de quem já estava logado. Os dados são mantidos.</td></tr>
+  <tr><td><strong>Habilitar / Desabilitar TOTP</strong></td><td>Liga ou desliga a exigência do código. Ao ligar, o médico cadastra o autenticador no próximo login.</td></tr>
+  <tr><td><strong>Refazer cadastro do TOTP</strong></td><td>Zera o segredo atual: use quando o médico <strong>trocou de celular</strong>.</td></tr>
+  <tr><td><strong>Redefinir senha</strong></td><td>Define nova senha (12 a 128 caracteres) e <strong>libera bloqueio</strong> por tentativas.</td></tr>
+</table>
+<figure><img src="manual/img/a06-medicos-redefinir-senha.png" alt="Painel de redefinição de senha"><figcaption>Figura 22. Redefinir a senha de um médico.</figcaption></figure>
+<div class="dica"><strong>Dicas.</strong> Médicos que vêm de um sistema integrado são criados sozinhos na primeira consulta e <strong>não têm senha</strong>: entram só pelo link de uso único. Para dar a um deles o acesso com senha, use <strong>Redefinir senha</strong>. O médico <strong>não</strong> liga nem desliga o próprio TOTP: essa decisão é sua.</div>
+
+<h3 id="a-sistemas">3.4 Sistemas e keys</h3>
+<p>Um <strong>sistema integrado</strong> é um programa externo (agenda, prontuário) que cria consultas e recebe transcrições. A lista tem <strong>busca</strong> e <strong>paginação</strong>; para cadastrar, digite o nome e clique em <kbd class="bt">Cadastrar</kbd>.</p>
+<figure><img src="manual/img/a07-sistemas-lista.png" alt="Lista de sistemas integrados com busca e paginação"><figcaption>Figura 23. Sistemas integrados (dados de exemplo).</figcaption></figure>
+<p>O ícone <strong>Abrir / editar</strong> (lápis) abre o sistema <strong>em uma janela própria</strong>, com as API keys e o webhook. A janela só fecha pelos botões <kbd class="bt">Fechar</kbd> — nunca sozinha —, para você ter tempo de copiar o que precisa.</p>
+<figure><img src="manual/img/a08-sistema-modal.png" alt="Janela do sistema com API keys e webhook"><figcaption>Figura 24. Janela do sistema: API keys e webhook.</figcaption></figure>
+<p><strong>Gerar uma API key</strong></p>
+<ol>
+  <li>Digite um nome para a key (por exemplo, <code>produção</code>).</li>
+  <li>Marque os <strong>escopos</strong>:</li>
+</ol>
+<table>
+  <tr><th>Escopo</th><th>Permite ao sistema</th></tr>
+  <tr><td><code>agendamento:escrever</code></td><td>Criar, alterar e cancelar consultas.</td></tr>
+  <tr><td><code>agendamento:ler</code></td><td>Consultar o estado de uma consulta (sem dados do paciente).</td></tr>
+  <tr><td><code>sala:iniciar</code></td><td>Pedir o <strong>link de uso único</strong> para o médico entrar na sala.</td></tr>
+</table>
+<ol start="3"><li>Clique em <kbd class="bt">Gerar key</kbd>. A key aparece <strong>no topo da janela</strong>, destacada, <strong>uma única vez</strong>:</li></ol>
+<figure><img src="manual/img/a08b-sistemas-key-criada.png" alt="Key gerada no topo da janela, mostrada uma única vez"><figcaption>Figura 25. Key criada (o valor da imagem é um exemplo).</figcaption></figure>
+<div class="aviso"><strong>Guarde agora.</strong> A key <strong>não será mostrada de novo</strong>: copie-a e entregue ao responsável técnico por canal seguro. Se perder, gere outra e <strong>revogue</strong> a antiga (ícone na linha da key). Quem tem a key age como aquele sistema.</div>
+<p><strong>Webhook de devolução.</strong> Na parte de baixo da janela:</p>
+<figure><img src="manual/img/a09-sistemas-webhook.png" alt="Configuração do webhook do sistema"><figcaption>Figura 26. Webhook de devolução.</figcaption></figure>
+<table>
+  <tr><th>Campo</th><th>O que fazer</th></tr>
+  <tr><td><strong>URL base (HTTPS)</strong></td><td>Endereço do sistema que recebe as transcrições. Só <strong>HTTPS</strong> com certificado válido; endereços internos não são aceitos.</td></tr>
+  <tr><td><strong>Ativo</strong></td><td>Liga ou desliga os envios deste sistema.</td></tr>
+  <tr><td><strong>Gerar novo segredo de assinatura</strong></td><td>Gera o segredo com que o MediLink <strong>assina</strong> cada envio, mostrado <strong>uma única vez</strong> no topo da janela. Troque-o de tempos em tempos.</td></tr>
+</table>
+
+<h3 id="a-termo">3.5 Termo de consentimento</h3>
+<p>O termo é o texto que o paciente <strong>precisa aceitar</strong> para a consulta acontecer. Você o mantém aqui, sem reinstalar nada.</p>
+<figure><img src="manual/img/a10-termo-versoes.png" alt="Lista de versões do termo"><figcaption>Figura 27. Versões do termo.</figcaption></figure>
+<table>
+  <tr><th>Situação</th><th>Significado</th></tr>
+  <tr><td><strong>VIGENTE</strong></td><td>A versão que os pacientes veem agora. Só existe <strong>uma</strong>.</td></tr>
+  <tr><td><strong>RASCUNHO</strong></td><td>Versão em edição; ainda não vale para ninguém.</td></tr>
+  <tr><td><strong>ARQUIVADO</strong></td><td>Versão antiga, mantida como prova do que cada paciente aceitou.</td></tr>
+</table>
+<p><strong>Publicar uma nova versão:</strong> clique em <kbd class="bt">Nova versão (a partir da vigente)</kbd>, edite o texto, use <kbd class="bt">Salvar rascunho</kbd> quantas vezes quiser e, quando pronto, <kbd class="bt">Publicar como vigente</kbd>.</p>
+<figure><img src="manual/img/a11-termo-rascunho.png" alt="Edição de um rascunho do termo"><figcaption>Figura 28. Rascunho do termo.</figcaption></figure>
+<ul>
+  <li><strong>Versão publicada não muda mais.</strong> Cada consentimento fica ligado à versão e ao hash do texto que o paciente de fato leu.</li>
+  <li>Se você publicar enquanto um paciente está na tela do termo, o sistema pede que ele recarregue e leia a nova versão.</li>
+  <li><strong>Revise o texto com o jurídico e o DPO.</strong> O texto que acompanha o sistema é uma minuta. Se a clínica usa webhook, informe no termo que a transcrição é enviada ao sistema do cliente.</li>
+</ul>
+
+<h3 id="a-webhooks">3.6 Webhooks</h3>
+<p>Mostra as <strong>entregas</strong> de transcrições ao sistema de cada cliente e permite refazê-las. Use o filtro <strong>Situação</strong> e <kbd class="bt">Atualizar</kbd>.</p>
+<figure><img src="manual/img/a12-webhooks-entregas.png" alt="Lista de entregas de webhook"><figcaption>Figura 29. Entregas de webhook (dados de exemplo).</figcaption></figure>
+<table>
+  <tr><th>Coluna</th><th>O que mostra</th></tr>
+  <tr><td><strong>Evento</strong></td><td><code>transcricao.concluida</code> (pronta) ou <code>transcricao.indisponivel</code> (não vai existir; o motivo aparece junto).</td></tr>
+  <tr><td><strong>Situação</strong></td><td><strong>PENDENTE</strong> (aguardando nova tentativa), <strong>ENTREGUE</strong> ou <strong>FALHA</strong>.</td></tr>
+  <tr><td><strong>Tentativas / HTTP / Erro</strong></td><td>Quantos envios, a resposta do destino e o motivo da falha.</td></tr>
+</table>
+<p class="muted">Em erro temporário do destino, a plataforma repete ao longo de cerca de 1 dia (1 min, 5 min, 30 min, 2 h, 6 h, 24 h). Erros definitivos (ex.: 400) encerram a entrega. Em uma entrega com <strong>FALHA</strong>, corrija a causa no destino e clique em <strong>Reenviar</strong>. A transcrição não é apagada enquanto não for entregue.</p>
+
+<h3 id="a-smtp">3.7 Envio de e-mail (SMTP)</h3>
+<p>Para o botão <strong>Enviar por e-mail</strong> do médico funcionar, configure aqui o servidor de e-mail da clínica. A configuração vale na hora, sem reiniciar o sistema.</p>
+<figure><img src="manual/img/a13-smtp.png" alt="Tela de configuração do servidor SMTP"><figcaption>Figura 30. Envio de e-mail (SMTP).</figcaption></figure>
+<table>
+  <tr><th>Campo</th><th>Observação</th></tr>
+  <tr><td><strong>Servidor (host)</strong></td><td>Endereço do servidor SMTP do seu provedor, por exemplo <code>smtp.seu-provedor.com</code>.</td></tr>
+  <tr><td><strong>Porta</strong></td><td>Em geral <code>587</code> (STARTTLS) ou <code>465</code>.</td></tr>
+  <tr><td><strong>Usuário</strong> e <strong>Senha</strong></td><td>Credenciais da conta de envio, se o servidor exigir autenticação. A senha fica <strong>cifrada</strong> no banco e nunca é reexibida: o campo mostra <code>••••••••</code> e, deixado em branco, <strong>mantém a senha atual</strong>.</td></tr>
+  <tr><td><strong>Remetente</strong></td><td>O endereço que aparece como remetente, por exemplo <code>no-reply@suaclinica.com.br</code>.</td></tr>
+  <tr><td><strong>Autenticar / STARTTLS</strong></td><td>Marque conforme o seu provedor (a maioria exige os dois).</td></tr>
+</table>
+<p>Depois de <kbd class="bt">Salvar</kbd>, use a seção <strong>Enviar um teste</strong>: informe um e-mail seu e clique em <kbd class="bt">Enviar teste</kbd>. Se o envio falhar, a tela mostra o erro para você ajustar os dados.</p>
+
+<h3 id="a-rotinas">3.8 Rotinas recomendadas e segurança</h3>
+<table>
+  <tr><th>Quando</th><th>O que fazer</th></tr>
+  <tr><td><strong>Todo dia</strong></td><td>Abra <strong>Andamento</strong>: incidentes, áudio no disco e webhooks com falha.</td></tr>
+  <tr><td><strong>Ao contratar</strong></td><td><strong>Médicos</strong> → cadastrar; senha inicial por canal seguro; TOTP conforme a política.</td></tr>
+  <tr><td><strong>Ao desligar alguém</strong></td><td><strong>Médicos</strong> → desativar; se era responsável por um sistema, revogue as keys.</td></tr>
+  <tr><td><strong>Troca de celular de um médico</strong></td><td><strong>Refazer cadastro do TOTP</strong>.</td></tr>
+  <tr><td><strong>Mudança no texto legal</strong></td><td><strong>Termo</strong> → nova versão → <strong>Publicar como vigente</strong>.</td></tr>
+  <tr><td><strong>A cada 6–12 meses</strong></td><td>Troque as API keys e o segredo de assinatura dos webhooks.</td></tr>
+</table>
+<ul>
+  <li>Use senha longa e exclusiva (12 a 128 caracteres) e guarde o autenticador.</li>
+  <li>Um administrador por pessoa: todas as ações ficam <strong>registradas</strong>, com quem fez e quando. Novos administradores são criados pela API (<code>POST /api/admin/administradores</code>).</li>
+  <li><strong>Saia</strong> ao terminar (a sessão já expira em 30 minutos). Não anote keys e segredos em canais abertos.</li>
+  <li>A área administrativa nunca mostra dados de pacientes. Se alguém pedir um CPF ou transcrição por aqui, desconfie.</li>
+</ul>
+
+<h3 id="a-problemas">3.9 Problemas comuns</h3>
+<table>
+  <tr><th>Problema</th><th>O que fazer</th></tr>
+  <tr><td>Não consigo entrar</td><td>Confira e-mail, senha e o código (muda a cada 30 s; cada código vale uma vez). Bloqueado: aguarde 15 minutos.</td></tr>
+  <tr><td>Fui “deslogado”</td><td>A sessão dura 30 minutos e é só em memória: recarregar a página exige novo login.</td></tr>
+  <tr><td>“Não foi possível cadastrar” um médico</td><td>O e-mail já existe ou a senha está fora de 12 a 128 caracteres.</td></tr>
+  <tr><td>O código TOTP de um médico não funciona</td><td><strong>Refazer cadastro do TOTP</strong> e conferir o relógio do celular.</td></tr>
+  <tr><td>A key foi perdida</td><td>Gere outra, atualize o sistema integrado e <strong>revogue</strong> a antiga.</td></tr>
+  <tr><td>Webhook em <strong>FALHA</strong></td><td>Veja <strong>Erro</strong>/<strong>HTTP</strong>, corrija o destino e use <strong>Reenviar</strong>.</td></tr>
+  <tr><td>O teste de e-mail falha</td><td>Confira host, porta, STARTTLS e as credenciais na tela <a href="#a-smtp">Envio de e-mail</a>.</td></tr>
+</table>
+
+<p class="muted" style="margin-top:48px">MediLink — manual gerado a partir do ambiente de demonstração, com dados fictícios. As telas podem variar conforme a versão instalada.</p>
+</main>
+</div>
+
+<a class="topo-pagina" href="#visao-geral" title="Voltar ao início" aria-label="Voltar ao início">↑</a>
+<dialog id="zoom"><img alt=""></dialog>
+<script>
+  const dlg = document.getElementById('zoom');
+  const dlgImg = dlg.querySelector('img');
+  document.querySelectorAll('main figure img').forEach(img => {
+    img.addEventListener('click', () => { dlgImg.src = img.src; dlgImg.alt = img.alt; dlg.showModal(); });
+  });
+  dlg.addEventListener('click', () => dlg.close());
+</script>
+</body>
+</html>
