@@ -186,3 +186,11 @@ app-resumo-admin, app-sistemas-admin, app-medicos-admin, app-termo-admin, app-we
 .modal-cabecalho h2 { margin: 0; }
 .modal-rodape { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; border-top: 1px solid var(--borda); padding-top: 12px; }
 .destaque-segredo { border-color: var(--sb-primary); }
+
+/* Grade de cartões do painel e gráficos (Chart.js) com legenda em HTML. */
+.grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.grade .card { margin: 0; }
+.grafico-wrap { position: relative; height: 180px; margin: 8px 0; }
+.legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; padding: 0; margin: 8px 0 0; }
+.legenda li { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.legenda .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
