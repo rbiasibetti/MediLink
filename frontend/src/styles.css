@@ -74,3 +74,27 @@ input:focus-visible, button:focus-visible, a:focus-visible, .termo:focus-visible
 .jitsi-wrap { height: calc(100vh - 110px); min-height: 360px; }
 .jitsi { width: 100%; height: 100%; }
 @media (max-width: 480px) { .pagina { padding: 12px 16px; } }
+
+/* --- Integração com o Bootstrap (carregado antes deste arquivo; o tema claro/escuro segue data-bs-theme, ver index.html) --- */
+/* Alinha a cor de destaque do Bootstrap à do MediLink e neutraliza as classes .btn/.card do Bootstrap, que colidem
+   com as nossas. O resto (tabelas responsivas, selects, grid) usa o Bootstrap diretamente nos componentes. */
+:root {
+  --bs-primary: var(--destaque);
+  --bs-link-color: var(--destaque);
+  --bs-link-hover-color: var(--destaque);
+  --bs-body-bg: var(--fundo);
+  --bs-body-color: var(--texto);
+  --bs-border-color: var(--borda);
+  --bs-secondary-color: var(--suave);
+}
+.card { display: block; }            /* a .card do Bootstrap é flex; a nossa é um bloco simples */
+.table { --bs-table-bg: transparent; margin-bottom: 0; vertical-align: middle; }
+.table > :not(caption) > * > * { padding: 0.6rem 0.75rem; }
+.table thead th { border-bottom-width: 2px; white-space: nowrap; font-size: 0.9rem; color: var(--suave); }
+.table code { font-size: 0.85em; }
+/* Cada aba da administração é um custom element; dá a elas o respiro lateral das telas largas. */
+app-resumo-admin, app-sistemas-admin, app-medicos-admin, app-termo-admin, app-webhooks-admin { display: block; padding: 16px; }
+/* Barra de navegação fixa abaixo do topo: botões de navegação ficam alinhados e com respiro. */
+.navegacao { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.navegacao .btn { margin-top: 0; }
+.ms-auto { margin-left: auto; }

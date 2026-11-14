@@ -36,15 +36,15 @@ const PODEM_REENVIAR = ['FALHA_NO_ENVIO', 'FALHA_NO_WORKER'];
           <ul>@for (e of p.webhooks | keyvalue; track e.key) { <li>{{ e.key }}: {{ e.value }}</li> } @empty { <li class="muted">Nenhuma entrega.</li> }</ul></section>
       </div>
       <h2>Por sistema integrado</h2>
-      <table><thead><tr><th>Sistema</th><th>Total</th><th>No período</th></tr></thead>
-        <tbody>@for (s of p.agendamentos.porSistema; track s.sistema) { <tr><td>{{ s.sistema }}</td><td>{{ s.total }}</td><td>{{ s.noPeriodo }}</td></tr> }</tbody></table>
+      <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Sistema</th><th>Total</th><th>No período</th></tr></thead>
+        <tbody>@for (s of p.agendamentos.porSistema; track s.sistema) { <tr><td>{{ s.sistema }}</td><td>{{ s.total }}</td><td>{{ s.noPeriodo }}</td></tr> }</tbody></table></div>
       <h2>Incidentes</h2>
       <p class="muted">Consulta que terminou sem transcrição por motivo técnico. Toda consulta precisa ser registrada, então cada uma deve ser investigada.</p>
       @if (p.incidentes.length === 0) { <p>Nenhum incidente.</p> } @else {
-        <table><thead><tr><th>Consulta</th><th>Tipo</th><th>Desde</th><th>Erro</th><th></th></tr></thead>
+        <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Consulta</th><th>Tipo</th><th>Desde</th><th>Erro</th><th></th></tr></thead>
           <tbody>@for (i of p.incidentes; track i.consultaId) {
             <tr><td><code>{{ i.consultaId }}</code></td><td>{{ i.tipo }}</td><td>{{ i.desde | date: 'dd/MM HH:mm' }}</td><td>{{ i.erro }}</td>
-              <td>@if (podeReenviar(i.tipo)) { <button class="btn secundario" type="button" (click)="reenviar(i.consultaId)">Reenviar</button> }</td></tr> }</tbody></table>
+              <td>@if (podeReenviar(i.tipo)) { <button class="btn secundario" type="button" (click)="reenviar(i.consultaId)">Reenviar</button> }</td></tr> }</tbody></table></div>
       }
     } @else if (!erro()) { <p role="status">Carregando…</p> }
   `,

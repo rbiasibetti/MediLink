@@ -24,22 +24,22 @@ const ESCOPOS = ['agendamento:escrever', 'agendamento:ler', 'sala:iniciar'];
       <input name="nome" placeholder="Nome do novo sistema" [(ngModel)]="nome" required />
       <button class="btn" type="submit" [disabled]="!nome()">Cadastrar</button>
     </form>
-    <table><thead><tr><th>Nome</th><th>Situação</th><th>Webhook</th><th></th></tr></thead>
+    <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Nome</th><th>Situação</th><th>Webhook</th><th></th></tr></thead>
       <tbody>@for (i of lista(); track i.id) {
         <tr><td>{{ i.nome }}</td><td>{{ i.ativo ? 'ativo' : 'desativado' }}</td>
           <td>{{ i.webhookAtivo ? i.webhookBaseUrl : '—' }}</td>
           <td><button class="btn secundario" type="button" (click)="abrir(i)">Abrir</button>
-            <button class="btn secundario" type="button" (click)="alternar(i)">{{ i.ativo ? 'Desativar' : 'Ativar' }}</button></td></tr> }</tbody></table>
+            <button class="btn secundario" type="button" (click)="alternar(i)">{{ i.ativo ? 'Desativar' : 'Ativar' }}</button></td></tr> }</tbody></table></div>
 
     @if (aberto(); as i) {
       <section class="card">
         <h3>{{ i.nome }}</h3>
         <h4>API keys</h4>
-        <table><thead><tr><th>Nome</th><th>Escopos</th><th>Último uso</th><th>Situação</th><th></th></tr></thead>
+        <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Nome</th><th>Escopos</th><th>Último uso</th><th>Situação</th><th></th></tr></thead>
           <tbody>@for (k of chaves(); track k.id) {
             <tr><td>{{ k.nome }}</td><td>{{ k.escopos }}</td><td>{{ k.ultimoUsoEm ? (k.ultimoUsoEm | date: 'dd/MM HH:mm') : 'nunca' }}</td>
               <td>{{ k.ativa ? 'ativa' : 'revogada' }}</td>
-              <td>@if (k.ativa) { <button class="btn secundario" type="button" (click)="revogar(k)">Revogar</button> }</td></tr> }</tbody></table>
+              <td>@if (k.ativa) { <button class="btn secundario" type="button" (click)="revogar(k)">Revogar</button> }</td></tr> }</tbody></table></div>
         <form (ngSubmit)="criarChave()">
           <input name="nomeKey" placeholder="Nome da key (ex.: produção)" [(ngModel)]="nomeKey" required />
           @for (e of escopos; track e) {

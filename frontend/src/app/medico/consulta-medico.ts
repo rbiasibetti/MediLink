@@ -24,7 +24,7 @@ type Estado = 'carregando' | 'sala' | 'saiu' | 'erro';
           <section class="card">
             <h1>Não foi possível abrir a sala</h1>
             <p>Verifique o login e se o agendamento é seu.</p>
-            <a class="btn" routerLink="/medico/agendar">Voltar</a>
+            <a class="btn" routerLink="/medico/consultas">Voltar à lista de consultas</a>
           </section>
         }
         @case ('sala') {
@@ -64,13 +64,19 @@ type Estado = 'carregando' | 'sala' | 'saiu' | 'erro';
                 <p class="muted">Encerrou por engano ou a conexão caiu? Dentro de poucos minutos você ainda pode voltar à mesma consulta.</p>
                 <button class="btn" type="button" (click)="reabrir()">Reabrir a consulta</button>
               }
-              <a class="btn secundario" [routerLink]="['/medico/transcricao', detalhe()?.id]">Ver a transcrição</a>
+              <div class="acoes">
+                <a class="btn" [routerLink]="['/medico/transcricao', detalhe()?.id]">Ver a transcrição</a>
+                <a class="btn secundario" routerLink="/medico/consultas">Voltar à lista de consultas</a>
+                <a class="btn secundario" routerLink="/medico/agendar">Novo agendamento</a>
+              </div>
             } @else {
               <h1>Você saiu da sala</h1>
               <p>A consulta ainda não começou, então não foi encerrada.</p>
-              <button class="btn" type="button" (click)="voltar()">Voltar para a sala</button>
+              <div class="acoes">
+                <button class="btn" type="button" (click)="voltar()">Voltar para a sala</button>
+                <a class="btn secundario" routerLink="/medico/consultas">Voltar à lista de consultas</a>
+              </div>
             }
-            <a class="btn secundario" routerLink="/medico/agendar">Novo agendamento</a>
           </section>
         }
       }

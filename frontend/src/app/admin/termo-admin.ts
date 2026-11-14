@@ -15,10 +15,10 @@ import { AdminApi, Termo } from '../core/admin-api';
     <h2>Termo de consentimento</h2>
     <p class="muted">Toda teleconsulta é registrada: o paciente só segue se aceitar o termo vigente. Alterar o termo é publicar uma nova versão.</p>
     @if (erro()) { <p class="erro" role="alert">{{ erro() }}</p> }
-    <table><thead><tr><th>Versão</th><th>Situação</th><th>Criado por</th><th>Publicado em</th><th></th></tr></thead>
+    <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Versão</th><th>Situação</th><th>Criado por</th><th>Publicado em</th><th></th></tr></thead>
       <tbody>@for (t of termos(); track t.id) {
         <tr><td>{{ t.versao }}</td><td>{{ t.status }}</td><td>{{ t.criadoPor }}</td><td>{{ t.publicadoEm ? (t.publicadoEm | date: 'dd/MM/yyyy HH:mm') : '—' }}</td>
-          <td><button class="btn secundario" type="button" (click)="abrir(t)">{{ t.status === 'RASCUNHO' ? 'Editar' : 'Ver' }}</button></td></tr> }</tbody></table>
+          <td><button class="btn secundario" type="button" (click)="abrir(t)">{{ t.status === 'RASCUNHO' ? 'Editar' : 'Ver' }}</button></td></tr> }</tbody></table></div>
     <button class="btn" type="button" (click)="novoRascunho()">Nova versão (a partir da vigente)</button>
 
     @if (aberto(); as t) {

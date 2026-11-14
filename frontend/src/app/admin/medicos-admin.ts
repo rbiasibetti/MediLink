@@ -23,7 +23,7 @@ import { AdminApi, MedicoAdm } from '../core/admin-api';
       <label><input type="checkbox" name="mtotp" [(ngModel)]="exigirTotp" /> Exigir TOTP (autenticador) no login</label>
       <button class="btn" type="submit" [disabled]="!nome() || !registro() || !email() || senha().length < 12">Cadastrar</button>
     </form>
-    <table>
+    <div class="table-responsive"><table class="table table-hover table-striped align-middle">
       <thead><tr><th>Nome</th><th>E-mail</th><th>Situação</th><th>TOTP</th><th></th></tr></thead>
       <tbody>
         @for (m of lista(); track m.id) {
@@ -41,7 +41,7 @@ import { AdminApi, MedicoAdm } from '../core/admin-api';
           </tr>
         }
       </tbody>
-    </table>
+    </table></div>
     @if (alvoSenha(); as m) {
       <form class="card" (ngSubmit)="redefinir()">
         <h3>Nova senha de {{ m.nome }}</h3>

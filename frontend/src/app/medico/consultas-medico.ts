@@ -36,7 +36,7 @@ const TRANSCRICAO: Record<TranscricaoEstado, string> = {
         @if (pagina(); as p) {
           @if (p.itens.length === 0) { <p class="muted">Nenhuma consulta encontrada.</p> }
           @else {
-            <table>
+            <div class="table-responsive"><table class="table table-hover table-striped align-middle">
               <thead><tr><th>Data</th><th>Paciente</th><th>Situação</th><th>Transcrição</th><th></th></tr></thead>
               <tbody>
                 @for (c of p.itens; track c.consultaId) {
@@ -56,7 +56,7 @@ const TRANSCRICAO: Record<TranscricaoEstado, string> = {
                   </tr>
                 }
               </tbody>
-            </table>
+            </table></div>
             @if (!p.leituraDeTranscricao) { <p class="muted" role="note">A leitura de transcrições por esta plataforma não está habilitada.</p> }
             <p class="muted">Página {{ p.pagina + 1 }} de {{ totalPaginas(p) }} · {{ p.total }} consulta(s)</p>
             <div class="acoes">

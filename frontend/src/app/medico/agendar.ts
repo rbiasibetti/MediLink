@@ -12,6 +12,9 @@ import { AgendamentoCriado, Api } from '../core/api';
   template: `
     <main class="pagina">
       <section class="card">
+        <div class="navegacao">
+          <a class="btn secundario" routerLink="/medico/consultas">← Voltar à lista de consultas</a>
+        </div>
         <h1>Novo agendamento</h1>
         <form (ngSubmit)="criar()">
           <label for="nome">Nome do paciente</label>

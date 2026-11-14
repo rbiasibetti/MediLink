@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api, TranscricaoLida } from '../core/api';
 
 type Estado = 'desabilitada' | 'carregando' | 'processando' | 'pronta' | 'sem-audio' | 'aberta' | 'falhou' | 'expirou' | 'negado';
@@ -9,9 +9,13 @@ type Estado = 'desabilitada' | 'carregando' | 'processando' | 'pronta' | 'sem-au
 @Component({
   selector: 'app-transcricao-medico',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
   template: `
     <main class="pagina larga">
       <section class="card">
+        <div class="navegacao">
+          <a class="btn secundario" routerLink="/medico/consultas">← Voltar à lista de consultas</a>
+        </div>
         <h1>Transcrição da consulta</h1>
         @switch (estado()) {
           @case ('carregando') { <p role="status">Carregando…</p> }

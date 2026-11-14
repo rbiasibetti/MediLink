@@ -17,12 +17,12 @@ import { AdminApi, Entrega } from '../core/admin-api';
       <button class="btn secundario" type="button" (click)="carregar()">Atualizar</button>
     </div>
     @if (erro()) { <p class="erro" role="alert">{{ erro() }}</p> }
-    <table><thead><tr><th>Evento</th><th>Situação</th><th>Tentativas</th><th>HTTP</th><th>Erro</th><th>Criada</th><th></th></tr></thead>
+    <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Evento</th><th>Situação</th><th>Tentativas</th><th>HTTP</th><th>Erro</th><th>Criada</th><th></th></tr></thead>
       <tbody>@for (e of lista(); track e.id) {
         <tr><td>{{ e.evento }}@if (e.motivo) { ({{ e.motivo }}) }</td><td>{{ e.status }}</td><td>{{ e.tentativas }}</td><td>{{ e.ultimoStatusHttp ?? '—' }}</td>
           <td>{{ e.ultimoErro ?? '—' }}</td><td>{{ e.criadoEm | date: 'dd/MM HH:mm' }}</td>
           <td>@if (e.status === 'FALHA') { <button class="btn secundario" type="button" (click)="reenviar(e)">Reenviar</button> }</td></tr>
-      } @empty { <tr><td colspan="7" class="muted">Nenhuma entrega.</td></tr> }</tbody></table>
+      } @empty { <tr><td colspan="7" class="muted">Nenhuma entrega.</td></tr> }</tbody></table></div>
   `,
 })
 export class WebhooksAdmin {
