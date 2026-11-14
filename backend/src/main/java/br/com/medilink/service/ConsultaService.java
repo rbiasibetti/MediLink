@@ -144,6 +144,23 @@ public class ConsultaService {
 		return detalhe(c);
 	}
 
+	/**
+	 * Cancela uma consulta agendada que ainda não começou (marca o agendamento como CANCELADO). Idempotente se já
+	 * cancelada. Depois de a consulta começar há registro clínico e a retenção manda: responde 409.
+	 */
+	@Transactional
+	public void cancelar(String medicoEmail, UUID consultaId) {
+		Consulta c = daMedico(medicoEmail, consultaId);
+		if (c.getAgendamento().getStatus() == br.com.medilink.domain.AgendamentoStatus.CANCELADO) {
+			return;
+		}
+		if (c.getStatus() != ConsultaStatus.CRIADA && c.getStatus() != ConsultaStatus.AGUARDANDO_PACIENTE) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "A consulta já começou e não pode ser cancelada.");
+		}
+		c.getAgendamento().cancelar();
+		auditoria.registrar(medicoEmail, "AGENDAMENTO_CANCELADO", "agendamento/" + c.getAgendamento().getId());
+	}
+
 	/** Só o médico dono vê a consulta; para os demais ela "não existe". */
 	public Consulta daMedico(String medicoEmail, UUID consultaId) {
 		var medico = medicos.findByEmail(medicoEmail).filter(m -> m.isAtivo())

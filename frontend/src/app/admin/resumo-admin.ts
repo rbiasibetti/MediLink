@@ -44,7 +44,7 @@ const PODEM_REENVIAR = ['FALHA_NO_ENVIO', 'FALHA_NO_WORKER'];
         <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Consulta</th><th>Tipo</th><th>Desde</th><th>Erro</th><th></th></tr></thead>
           <tbody>@for (i of p.incidentes; track i.consultaId) {
             <tr><td><code>{{ i.consultaId }}</code></td><td>{{ i.tipo }}</td><td>{{ i.desde | date: 'dd/MM HH:mm' }}</td><td>{{ i.erro }}</td>
-              <td>@if (podeReenviar(i.tipo)) { <button class="btn secundario" type="button" (click)="reenviar(i.consultaId)">Reenviar</button> }</td></tr> }</tbody></table></div>
+              <td class="text-end">@if (podeReenviar(i.tipo)) { <button class="btn-icone" type="button" (click)="reenviar(i.consultaId)" title="Reenviar" aria-label="Reenviar"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></button> }</td></tr> }</tbody></table></div>
       }
     } @else if (!erro()) { <p role="status">Carregando…</p> }
   `,

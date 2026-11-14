@@ -42,8 +42,10 @@ export interface LoginMedicoResposta {
   etapa: 'OK' | 'ENROLAR_TOTP'; token?: string; expiraEm?: string; nome?: string; segredoTotp?: string; otpauthUri?: string;
 }
 export type TranscricaoEstado = 'NAO_APLICAVEL' | 'EM_PROCESSAMENTO' | 'DISPONIVEL' | 'SEM_AUDIO' | 'FALHA' | 'EXPIRADA';
+export type AgendamentoStatus = 'AGENDADO' | 'CANCELADO' | 'REALIZADO';
 export interface ConsultaResumo {
   consultaId: string; agendamentoId: string; pacienteNome: string; dataHora: string; status: string;
+  agendamentoStatus: AgendamentoStatus; roomName: string;
   inicioEm: string | null; fimEm: string | null; transcricao: TranscricaoEstado;
 }
 /** `leituraDeTranscricao` falso: a plataforma não está entregando o texto das transcrições ao médico (parâmetro do servidor). */
@@ -140,5 +142,10 @@ export class Api {
 
   encerrar(consultaId: string): Observable<ConsultaDetalhe> {
     return this.http.post<ConsultaDetalhe>(`/api/consultas/${consultaId}/encerrar`, null, { headers: this.auth.headers() });
+  }
+
+  /** O médico cancela uma consulta agendada que ainda não começou (204). */
+  cancelarConsulta(consultaId: string): Observable<void> {
+    return this.http.post<void>(`/api/consultas/${consultaId}/cancelar`, null, { headers: this.auth.headers() });
   }
 }

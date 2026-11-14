@@ -32,12 +32,12 @@ import { AdminApi, MedicoAdm } from '../core/admin-api';
             <td>{{ m.deIntegracao ? 'integração' : m.email }}</td>
             <td>{{ m.ativo ? 'ativo' : 'desativado' }}{{ m.temSenha ? '' : ' · sem senha' }}</td>
             <td>{{ m.totpHabilitado ? (m.totpConfirmado ? 'ativo' : 'aguardando cadastro') : 'não exigido' }}</td>
-            <td class="acoes">
-              <button class="btn secundario" type="button" (click)="alternarAtivo(m)">{{ m.ativo ? 'Desativar' : 'Ativar' }}</button>
-              <button class="btn secundario" type="button" (click)="alternarTotp(m)">{{ m.totpHabilitado ? 'Desabilitar TOTP' : 'Habilitar TOTP' }}</button>
-              @if (m.totpHabilitado) { <button class="btn secundario" type="button" (click)="alternarTotp(m, true)">Refazer cadastro do TOTP</button> }
-              <button class="btn secundario" type="button" (click)="abrirSenha(m)">Redefinir senha</button>
-            </td>
+            <td class="text-end"><div class="acoes-tabela justify-content-end">
+              <button class="btn-icone" type="button" (click)="alternarAtivo(m)" [title]="m.ativo ? 'Desativar' : 'Ativar'" [attr.aria-label]="m.ativo ? 'Desativar' : 'Ativar'"><i class="bi" [class.bi-toggle-on]="m.ativo" [class.bi-toggle-off]="!m.ativo" aria-hidden="true"></i></button>
+              <button class="btn-icone" type="button" (click)="alternarTotp(m)" [title]="m.totpHabilitado ? 'Desabilitar TOTP' : 'Habilitar TOTP'" [attr.aria-label]="m.totpHabilitado ? 'Desabilitar TOTP' : 'Habilitar TOTP'"><i class="bi" [class.bi-shield-lock]="!m.totpHabilitado" [class.bi-shield-slash]="m.totpHabilitado" aria-hidden="true"></i></button>
+              @if (m.totpHabilitado) { <button class="btn-icone" type="button" (click)="alternarTotp(m, true)" title="Refazer cadastro do TOTP" aria-label="Refazer cadastro do TOTP"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button> }
+              <button class="btn-icone" type="button" (click)="abrirSenha(m)" title="Redefinir senha" aria-label="Redefinir senha"><i class="bi bi-key" aria-hidden="true"></i></button>
+            </div></td>
           </tr>
         }
       </tbody>

@@ -15,32 +15,39 @@ type Aba = 'resumo' | 'medicos' | 'sistemas' | 'termo' | 'webhooks';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ResumoAdmin, MedicosAdmin, SistemasAdmin, TermoAdmin, WebhooksAdmin],
   template: `
-    <main class="pagina larga">
-      <header class="barra">
-        <nav aria-label="Seções da administração" class="acoes">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <nav aria-label="Seções da administração">
           @for (a of abas; track a.id) {
-            <button class="btn" type="button" [class.secundario]="aba() !== a.id" [attr.aria-current]="aba() === a.id ? 'page' : null" (click)="aba.set(a.id)">{{ a.rotulo }}</button>
+            <button type="button" [class.ativo]="aba() === a.id" [attr.aria-current]="aba() === a.id ? 'page' : null" (click)="aba.set(a.id)">
+              <i class="bi {{ a.icone }}" aria-hidden="true"></i> {{ a.rotulo }}
+            </button>
           }
+          <button type="button" class="sair" (click)="sair()"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sair</button>
         </nav>
-        <button class="link" type="button" (click)="sair()">Sair</button>
-      </header>
-      @switch (aba()) {
-        @case ('resumo') { <app-resumo-admin /> }
-        @case ('medicos') { <app-medicos-admin /> }
-        @case ('sistemas') { <app-sistemas-admin /> }
-        @case ('termo') { <app-termo-admin /> }
-        @case ('webhooks') { <app-webhooks-admin /> }
-      }
-    </main>
+      </aside>
+      <main class="app-content">
+        @switch (aba()) {
+          @case ('resumo') { <app-resumo-admin /> }
+          @case ('medicos') { <app-medicos-admin /> }
+          @case ('sistemas') { <app-sistemas-admin /> }
+          @case ('termo') { <app-termo-admin /> }
+          @case ('webhooks') { <app-webhooks-admin /> }
+        }
+      </main>
+    </div>
   `,
 })
 export class PainelAdmin {
   private readonly auth = inject(AdminAuth);
   private readonly router = inject(Router);
   protected readonly aba = signal<Aba>('resumo');
-  protected readonly abas: { id: Aba; rotulo: string }[] = [
-    { id: 'resumo', rotulo: 'Andamento' }, { id: 'medicos', rotulo: 'Médicos' }, { id: 'sistemas', rotulo: 'Sistemas e keys' },
-    { id: 'termo', rotulo: 'Termo de consentimento' }, { id: 'webhooks', rotulo: 'Webhooks' },
+  protected readonly abas: { id: Aba; rotulo: string; icone: string }[] = [
+    { id: 'resumo', rotulo: 'Andamento', icone: 'bi-speedometer2' },
+    { id: 'medicos', rotulo: 'Médicos', icone: 'bi-person-badge' },
+    { id: 'sistemas', rotulo: 'Sistemas e keys', icone: 'bi-plug' },
+    { id: 'termo', rotulo: 'Termo de consentimento', icone: 'bi-file-earmark-text' },
+    { id: 'webhooks', rotulo: 'Webhooks', icone: 'bi-arrow-repeat' },
   ];
 
   protected sair(): void {

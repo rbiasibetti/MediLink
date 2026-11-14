@@ -35,7 +35,8 @@ public class HistoricoDeConsultasService {
 	public enum TranscricaoEstado { NAO_APLICAVEL, EM_PROCESSAMENTO, DISPONIVEL, SEM_AUDIO, FALHA, EXPIRADA }
 
 	public record Resumo(UUID consultaId, UUID agendamentoId, String pacienteNome, Instant dataHora, ConsultaStatus status,
-			Instant inicioEm, Instant fimEm, TranscricaoEstado transcricao) {
+			br.com.medilink.domain.AgendamentoStatus agendamentoStatus, String roomName, Instant inicioEm, Instant fimEm,
+			TranscricaoEstado transcricao) {
 	}
 
 	public record Pagina(List<Resumo> itens, int pagina, int tamanho, long total, boolean leituraDeTranscricao) {
@@ -68,8 +69,8 @@ public class HistoricoDeConsultasService {
 		Map<UUID, TranscricaoJob> jobsPorConsulta = ids.isEmpty() ? Map.of()
 				: jobs.findByConsultaIdIn(ids).stream().collect(Collectors.toMap(TranscricaoJob::getConsultaId, Function.identity()));
 		List<Resumo> itens = p.getContent().stream().map(c -> new Resumo(c.getId(), c.getAgendamento().getId(), c.getAgendamento().getPacienteNome(),
-				c.getAgendamento().getDataHora(), c.getStatus(), c.getInicioEm(), c.getFimEm(),
-				estado(c, comTranscricao.contains(c.getId()), jobsPorConsulta.get(c.getId())))).toList();
+				c.getAgendamento().getDataHora(), c.getStatus(), c.getAgendamento().getStatus(), c.getAgendamento().getRoomName(),
+				c.getInicioEm(), c.getFimEm(), estado(c, comTranscricao.contains(c.getId()), jobsPorConsulta.get(c.getId())))).toList();
 		return new Pagina(itens, p.getNumber(), p.getSize(), p.getTotalElements(), leituraPeloMedico);
 	}
 

@@ -15,7 +15,7 @@ function digitar(f: { nativeElement: HTMLElement }, seletor: string, valor: stri
   el.dispatchEvent(new Event('input'));
 }
 function clicar(f: { nativeElement: HTMLElement }, rotulo: string) {
-  const b = Array.from(f.nativeElement.querySelectorAll('button')).find((x) => x.textContent?.includes(rotulo));
+  const b = Array.from(f.nativeElement.querySelectorAll('button')).find((x) => (x.getAttribute('aria-label') ?? x.textContent ?? '').includes(rotulo));
   if (!b) throw new Error('botão não encontrado: ' + rotulo);
   b.click();
 }

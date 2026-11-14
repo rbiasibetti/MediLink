@@ -29,6 +29,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -131,5 +132,43 @@ class HistoricoDeConsultasApiTest {
 
 		mvc.perform(get("/api/consultas")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/consultas").header("Authorization", "Bearer " + sessao)).andExpect(status().isForbidden());
+	}
+
+	@Test
+	void aListagemTrazORoomNameEOStatusDoAgendamentoParaRevisarOLinkDoPaciente() throws Exception {
+		Consulta c = cenario.criar();
+
+		mvc.perform(get("/api/consultas").with(user(cenario.emailMedico)))
+				.andExpect(jsonPath("$.itens[0].roomName").value(c.sala()))
+				.andExpect(jsonPath("$.itens[0].agendamentoStatus").value("AGENDADO"));
+	}
+
+	@Test
+	void medicoCancelaConsultaAgendadaQueAindaNaoComecou() throws Exception {
+		Consulta c = cenario.criar();
+
+		mvc.perform(post("/api/consultas/" + c.id() + "/cancelar").with(user(cenario.emailMedico))).andExpect(status().isNoContent());
+		mvc.perform(post("/api/consultas/" + c.id() + "/cancelar").with(user(cenario.emailMedico))).andExpect(status().isNoContent()); // idempotente
+
+		mvc.perform(get("/api/consultas").with(user(cenario.emailMedico)))
+				.andExpect(jsonPath("$.itens[0].agendamentoStatus").value("CANCELADO"));
+	}
+
+	@Test
+	void naoCancelaConsultaJaEmAndamento() throws Exception {
+		Consulta c = cenario.criar();
+		cenario.consentir(c, true);
+		cenario.iniciar(c);
+
+		mvc.perform(post("/api/consultas/" + c.id() + "/cancelar").with(user(cenario.emailMedico))).andExpect(status().isConflict());
+	}
+
+	@Test
+	void medicoNaoCancelaConsultaDeOutro() throws Exception {
+		Consulta c = cenario.criar();
+		var outro = new CenarioDeConsulta(mvc, medicos);
+
+		mvc.perform(post("/api/consultas/" + c.id() + "/cancelar").with(user(outro.emailMedico))).andExpect(status().isNotFound());
+		mvc.perform(post("/api/consultas/" + c.id() + "/cancelar")).andExpect(status().isUnauthorized());
 	}
 }

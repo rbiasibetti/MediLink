@@ -21,7 +21,7 @@ function digitar(f: { nativeElement: HTMLElement }, seletor: string, valor: stri
   el.dispatchEvent(new Event('input'));
 }
 function clicar(f: { nativeElement: HTMLElement }, rotulo: string) {
-  const b = Array.from(f.nativeElement.querySelectorAll('button')).find((x) => x.textContent?.includes(rotulo));
+  const b = Array.from(f.nativeElement.querySelectorAll('button')).find((x) => (x.getAttribute('aria-label') ?? x.textContent ?? '').includes(rotulo));
   if (!b) throw new Error('botão não encontrado: ' + rotulo);
   b.click();
 }
@@ -112,7 +112,7 @@ describe('ResumoAdmin', () => {
     expect(texto).toContain('Clínica X');
     expect(texto).toContain('c-1');
     expect(texto).toContain('SEM_AUDIO');
-    const reenviar = Array.from(f.nativeElement.querySelectorAll('button')).filter((b) => (b as HTMLElement).textContent?.includes('Reenviar'));
+    const reenviar = Array.from(f.nativeElement.querySelectorAll('button')).filter((b) => ((b as HTMLElement).getAttribute('aria-label') ?? (b as HTMLElement).textContent ?? '').includes('Reenviar'));
     expect(reenviar).toHaveLength(1); // o SEM_AUDIO não tem o que reenviar
     (reenviar[0] as HTMLButtonElement).click();
     await assentar(f);

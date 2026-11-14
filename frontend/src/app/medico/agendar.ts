@@ -3,18 +3,17 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { MedicoLayout } from './medico-layout';
 import { AgendamentoCriado, Api } from '../core/api';
 
 @Component({
   selector: 'app-agendar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink, DatePipe, MedicoLayout],
   template: `
-    <main class="pagina">
-      <section class="card">
-        <div class="navegacao">
-          <a class="btn secundario" routerLink="/medico/consultas">← Voltar à lista de consultas</a>
-        </div>
+    <app-medico-layout>
+      <div class="pagina">
+      <section class="painel-card">
         <h1>Novo agendamento</h1>
         <form (ngSubmit)="criar()">
           <label for="nome">Nome do paciente</label>
@@ -35,7 +34,7 @@ import { AgendamentoCriado, Api } from '../core/api';
       </section>
 
       @if (criado(); as c) {
-        <section class="card" aria-live="polite">
+        <section class="painel-card" aria-live="polite">
           <h2>Agendamento criado</h2>
           <p>{{ c.pacienteNome }} · {{ c.dataHora | date: 'dd/MM/yyyy HH:mm' }}</p>
           <label for="link">Link da consulta</label>
@@ -48,7 +47,8 @@ import { AgendamentoCriado, Api } from '../core/api';
           @if (aviso()) { <p role="status">{{ aviso() }}</p> }
         </section>
       }
-    </main>
+    </div>
+    </app-medico-layout>
   `,
 })
 export class Agendar {

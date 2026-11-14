@@ -18,7 +18,7 @@ import { AdminApi, Termo } from '../core/admin-api';
     <div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead><tr><th>Versão</th><th>Situação</th><th>Criado por</th><th>Publicado em</th><th></th></tr></thead>
       <tbody>@for (t of termos(); track t.id) {
         <tr><td>{{ t.versao }}</td><td>{{ t.status }}</td><td>{{ t.criadoPor }}</td><td>{{ t.publicadoEm ? (t.publicadoEm | date: 'dd/MM/yyyy HH:mm') : '—' }}</td>
-          <td><button class="btn secundario" type="button" (click)="abrir(t)">{{ t.status === 'RASCUNHO' ? 'Editar' : 'Ver' }}</button></td></tr> }</tbody></table></div>
+          <td class="text-end"><button class="btn-icone" type="button" (click)="abrir(t)" [title]="t.status === 'RASCUNHO' ? 'Editar' : 'Ver'" [attr.aria-label]="t.status === 'RASCUNHO' ? 'Editar' : 'Ver'"><i class="bi" [class.bi-pencil]="t.status === 'RASCUNHO'" [class.bi-eye]="t.status !== 'RASCUNHO'" aria-hidden="true"></i></button></td></tr> }</tbody></table></div>
     <button class="btn" type="button" (click)="novoRascunho()">Nova versão (a partir da vigente)</button>
 
     @if (aberto(); as t) {

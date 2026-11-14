@@ -57,4 +57,11 @@ class ConsultaController {
 	Detalhe encerrar(@PathVariable UUID id, Principal medico) {
 		return consultas.encerrar(medico.getName(), id);
 	}
+
+	/** O médico cancela uma consulta agendada que ainda não começou. */
+	@PostMapping("/cancelar")
+	ResponseEntity<Void> cancelar(@PathVariable UUID id, Principal medico) {
+		consultas.cancelar(medico.getName(), id);
+		return ResponseEntity.noContent().build();
+	}
 }

@@ -28,8 +28,8 @@ const ESCOPOS = ['agendamento:escrever', 'agendamento:ler', 'sala:iniciar'];
       <tbody>@for (i of lista(); track i.id) {
         <tr><td>{{ i.nome }}</td><td>{{ i.ativo ? 'ativo' : 'desativado' }}</td>
           <td>{{ i.webhookAtivo ? i.webhookBaseUrl : '—' }}</td>
-          <td><button class="btn secundario" type="button" (click)="abrir(i)">Abrir</button>
-            <button class="btn secundario" type="button" (click)="alternar(i)">{{ i.ativo ? 'Desativar' : 'Ativar' }}</button></td></tr> }</tbody></table></div>
+          <td class="text-end"><div class="acoes-tabela justify-content-end"><button class="btn-icone" type="button" (click)="abrir(i)" title="Abrir" aria-label="Abrir"><i class="bi bi-folder2-open" aria-hidden="true"></i></button>
+            <button class="btn-icone" type="button" (click)="alternar(i)" [title]="i.ativo ? 'Desativar' : 'Ativar'" [attr.aria-label]="i.ativo ? 'Desativar' : 'Ativar'"><i class="bi" [class.bi-toggle-on]="i.ativo" [class.bi-toggle-off]="!i.ativo" aria-hidden="true"></i></button></div></td></tr> }</tbody></table></div>
 
     @if (aberto(); as i) {
       <section class="card">
@@ -39,7 +39,7 @@ const ESCOPOS = ['agendamento:escrever', 'agendamento:ler', 'sala:iniciar'];
           <tbody>@for (k of chaves(); track k.id) {
             <tr><td>{{ k.nome }}</td><td>{{ k.escopos }}</td><td>{{ k.ultimoUsoEm ? (k.ultimoUsoEm | date: 'dd/MM HH:mm') : 'nunca' }}</td>
               <td>{{ k.ativa ? 'ativa' : 'revogada' }}</td>
-              <td>@if (k.ativa) { <button class="btn secundario" type="button" (click)="revogar(k)">Revogar</button> }</td></tr> }</tbody></table></div>
+              <td class="text-end">@if (k.ativa) { <button class="btn-icone perigo" type="button" (click)="revogar(k)" title="Revogar" aria-label="Revogar"><i class="bi bi-x-circle" aria-hidden="true"></i></button> }</td></tr> }</tbody></table></div>
         <form (ngSubmit)="criarChave()">
           <input name="nomeKey" placeholder="Nome da key (ex.: produção)" [(ngModel)]="nomeKey" required />
           @for (e of escopos; track e) {

@@ -21,7 +21,7 @@ import { AdminApi, Entrega } from '../core/admin-api';
       <tbody>@for (e of lista(); track e.id) {
         <tr><td>{{ e.evento }}@if (e.motivo) { ({{ e.motivo }}) }</td><td>{{ e.status }}</td><td>{{ e.tentativas }}</td><td>{{ e.ultimoStatusHttp ?? '—' }}</td>
           <td>{{ e.ultimoErro ?? '—' }}</td><td>{{ e.criadoEm | date: 'dd/MM HH:mm' }}</td>
-          <td>@if (e.status === 'FALHA') { <button class="btn secundario" type="button" (click)="reenviar(e)">Reenviar</button> }</td></tr>
+          <td class="text-end">@if (e.status === 'FALHA') { <button class="btn-icone" type="button" (click)="reenviar(e)" title="Reenviar" aria-label="Reenviar"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></button> }</td></tr>
       } @empty { <tr><td colspan="7" class="muted">Nenhuma entrega.</td></tr> }</tbody></table></div>
   `,
 })
