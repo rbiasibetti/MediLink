@@ -1,12 +1,11 @@
 package br.com.medilink.service;
 
+import br.com.medilink.email.ProvedorDeEmail;
 import br.com.medilink.service.AgendamentoService.ParaEmail;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,19 +28,16 @@ public class EmailService {
 			.ofPattern("dd/MM/yyyy 'às' HH:mm", Locale.forLanguageTag("pt-BR"))
 			.withZone(ZoneId.of("America/Sao_Paulo"));
 
-	private final JavaMailSender mail;
+	private final ProvedorDeEmail provedor;
 	private final AgendamentoService agendamentos;
 	private final AuditService auditoria;
 	private final Clock clock;
-	private final String remetente;
 
-	public EmailService(JavaMailSender mail, AgendamentoService agendamentos, AuditService auditoria, Clock clock,
-			@Value("${medilink.mail.from}") String remetente) {
-		this.mail = mail;
+	public EmailService(ProvedorDeEmail provedor, AgendamentoService agendamentos, AuditService auditoria, Clock clock) {
+		this.provedor = provedor;
 		this.agendamentos = agendamentos;
 		this.auditoria = auditoria;
 		this.clock = clock;
-		this.remetente = remetente;
 	}
 
 	/** Sem @Transactional de propósito: a falha de envio precisa ser auditada mesmo lançando exceção. */
@@ -56,7 +52,7 @@ public class EmailService {
 		}
 		String recurso = "agendamento/" + dados.agendamentoId();
 		try {
-			mail.send(montar(dados));
+			provedor.sender().send(montar(dados));
 		}
 		catch (MailException | MessagingException e) {
 			auditoria.registrar(ator, "EMAIL_LINK_FALHA", recurso);
@@ -68,9 +64,9 @@ public class EmailService {
 	}
 
 	private MimeMessage montar(ParaEmail d) throws MessagingException {
-		MimeMessage mensagem = mail.createMimeMessage();
+		MimeMessage mensagem = provedor.sender().createMimeMessage();
 		MimeMessageHelper h = new MimeMessageHelper(mensagem, false, "UTF-8");
-		h.setFrom(remetente);
+		h.setFrom(provedor.remetente());
 		h.setTo(d.pacienteEmail());
 		h.setSubject("Sua teleconsulta com " + d.medicoNome() + " em " + QUANDO.format(d.dataHora()));
 		h.setText(corpo(d), false);

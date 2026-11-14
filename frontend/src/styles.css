@@ -167,3 +167,22 @@ app-resumo-admin, app-sistemas-admin, app-medicos-admin, app-termo-admin, app-we
   .sidebar nav a, .sidebar nav button { width: auto; white-space: nowrap; border-radius: 0.4rem; padding: 0.5rem 0.8rem; }
   .sidebar nav a.ativo, .sidebar nav button.ativo { box-shadow: none; }
 }
+
+/* Formulário em grade (duas colunas em telas largas), usado na configuração de SMTP. */
+.grade-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; }
+.grade-form input { width: 100%; }
+@media (max-width: 560px) { .grade-form { grid-template-columns: 1fr; } }
+
+/* Barra de busca/paginação das listagens. */
+.lista-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.lista-barra .busca { position: relative; flex: 1; min-width: 180px; }
+.lista-barra .busca .bi { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--suave); }
+.lista-barra .busca input { padding-left: 32px; }
+.paginacao { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+
+/* Modal largo (edição de sistema): rola se o conteúdo passar da altura da tela. */
+.modal-largo { max-width: 680px; max-height: 88vh; overflow-y: auto; }
+.modal-cabecalho { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.modal-cabecalho h2 { margin: 0; }
+.modal-rodape { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; border-top: 1px solid var(--borda); padding-top: 12px; }
+.destaque-segredo { border-color: var(--sb-primary); }

@@ -76,4 +76,16 @@ export class AdminApi {
     return this.http.get<Entrega[]>(`/api/admin/webhooks/entregas${status ? `?status=${status}` : ''}`, this.h());
   }
   reenviarEntrega(id: string): Observable<void> { return this.http.post<void>(`/api/admin/webhooks/entregas/${id}/reenviar`, null, this.h()); }
+
+  smtp(): Observable<SmtpConfig> { return this.http.get<SmtpConfig>('/api/admin/smtp', this.h()); }
+  salvarSmtp(c: SmtpSalvar): Observable<SmtpConfig> { return this.http.put<SmtpConfig>('/api/admin/smtp', c, this.h()); }
+  testarSmtp(para: string): Observable<void> { return this.http.post<void>('/api/admin/smtp/testar', { para }, this.h()); }
+}
+
+export interface SmtpConfig {
+  host: string; porta: number; usuario: string; temSenha: boolean; autenticar: boolean; starttls: boolean;
+  remetente: string; configurado: boolean; atualizadoPor: string | null; atualizadoEm: string | null;
+}
+export interface SmtpSalvar {
+  host: string; porta: number; usuario: string; senha?: string; autenticar: boolean; starttls: boolean; remetente: string;
 }

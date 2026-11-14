@@ -123,13 +123,15 @@ class AdminController {
 	private final TranscricaoJobRepository jobs;
 	private final AudioTransitorioRepository audios;
 	private final br.com.medilink.repository.WebhookEntregaRepository entregasRepo;
+	private final br.com.medilink.email.SmtpService smtp;
 	private final AuditService auditoria;
 	private final Clock clock;
 	private final boolean webhookPermiteHttp;
 
 	AdminController(AdminAuthService auth, AdministradorRepository admins, PainelService painel, IntegradorRepository integradores,
 			ApiKeyService keys, TermoService termos, TranscricaoJobRepository jobs, AudioTransitorioRepository audios,
-			br.com.medilink.repository.WebhookEntregaRepository entregasRepo, AuditService auditoria, Clock clock, @Value("${medilink.webhook.modo-dev:false}") boolean webhookPermiteHttp) {
+			br.com.medilink.repository.WebhookEntregaRepository entregasRepo, br.com.medilink.email.SmtpService smtp,
+			AuditService auditoria, Clock clock, @Value("${medilink.webhook.modo-dev:false}") boolean webhookPermiteHttp) {
 		this.auth = auth;
 		this.admins = admins;
 		this.painel = painel;
@@ -139,9 +141,40 @@ class AdminController {
 		this.jobs = jobs;
 		this.audios = audios;
 		this.entregasRepo = entregasRepo;
+		this.smtp = smtp;
 		this.auditoria = auditoria;
 		this.clock = clock;
 		this.webhookPermiteHttp = webhookPermiteHttp;
+	}
+
+	// ------------------------------------------------------------ SMTP (envio do link por e-mail)
+
+	record SmtpConfig(@NotBlank @Size(max = 255) String host, int porta, @Size(max = 255) String usuario, @Size(max = 255) String senha,
+			@NotNull Boolean autenticar, @NotNull Boolean starttls, @NotBlank @Size(max = 255) String remetente) {
+		@Override
+		public String toString() {
+			return "SmtpConfig[host=" + host + "]";
+		}
+	}
+
+	record TesteSmtp(@NotBlank @Size(max = 254) String para) {
+	}
+
+	@GetMapping("/smtp")
+	br.com.medilink.email.SmtpService.Visao smtp() {
+		return smtp.atual();
+	}
+
+	@PutMapping("/smtp")
+	br.com.medilink.email.SmtpService.Visao salvarSmtp(@Valid @RequestBody SmtpConfig req, @AuthenticationPrincipal AdminPrincipal eu) {
+		return smtp.salvar(eu.email(), new br.com.medilink.email.SmtpService.Dados(req.host(), req.porta(), req.usuario(),
+				req.senha(), req.autenticar(), req.starttls(), req.remetente()));
+	}
+
+	@PostMapping("/smtp/testar")
+	ResponseEntity<Void> testarSmtp(@Valid @RequestBody TesteSmtp req, @AuthenticationPrincipal AdminPrincipal eu) {
+		smtp.testar(eu.email(), req.para());
+		return ResponseEntity.noContent().build();
 	}
 
 	// ------------------------------------------------------------ login e administradores

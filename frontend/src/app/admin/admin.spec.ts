@@ -139,12 +139,13 @@ describe('SistemasAdmin', () => {
     await assentar(f);
 
     expect(api.criarChave).toHaveBeenCalledWith('s1', 'produção', ['agendamento:escrever', 'agendamento:ler', 'sala:iniciar']);
-    expect(f.nativeElement.textContent).toContain('SEGREDO-MOSTRADO-UMA-VEZ');
+    expect((f.nativeElement.querySelector('.destaque-segredo input') as HTMLInputElement).value).toContain('SEGREDO-MOSTRADO-UMA-VEZ');
     expect(f.nativeElement.textContent).toContain('não será mostrado de novo');
+    expect(f.nativeElement.querySelector('.modal-caixa')).not.toBeNull(); // a key aparece no topo do modal, que segue aberto
 
     clicar(f, 'Já guardei');
     await assentar(f);
-    expect(f.nativeElement.textContent).not.toContain('SEGREDO-MOSTRADO-UMA-VEZ');
+    expect(f.nativeElement.querySelector('.destaque-segredo')).toBeNull();
   });
 });
 
