@@ -2,7 +2,7 @@
 
 Plataforma de **telemedicina self-hosted** sobre o [Jitsi Meet](https://jitsi.org/). O médico (ou um sistema integrado) agenda a consulta e o paciente recebe um link; o paciente confirma a identidade por CPF, aceita o termo de consentimento e aguarda o aceite do médico; a consulta acontece por vídeo; o áudio é capturado **no servidor**, transcrito de forma assíncrona e a transcrição vai para o prontuário (e, se configurado, é devolvida por webhook ao sistema de origem). Nenhum dado sensível sai da infraestrutura própria, salvo o destino de webhook que o administrador cadastrar.
 
-> **Manual do usuário com imagens:** [`docs/manual/`](docs/manual/README.md) (paciente, médico, administrador e integração).
+> **Manual do usuário com imagens:** <https://rbiasibetti.github.io/MediLink/> (paciente, médico e administrador; a versão em Markdown continua em [`docs/manual/`](docs/manual/README.md)).
 
 ![Java](https://img.shields.io/badge/Java-25-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F)
@@ -1475,7 +1475,7 @@ Já feitas: T01 a T14, o consentimento obrigatório e **T16 a T20**. Mapeadas, *
 
 | Documento | Conteúdo |
 | --- | --- |
-| [`docs/manual/`](docs/manual/README.md) | **Manual do usuário** com imagens e navegação: paciente, médico, administrador e integração |
+| <https://rbiasibetti.github.io/MediLink/> | **Manual do usuário** em HTML navegável com imagens: paciente, médico e administrador (fonte em [`docs/manual/`](docs/manual/README.md), com o capítulo de integração) |
 | [`docs/spec.md`](docs/spec.md) | Requisitos funcionais, critérios de aceite, domínio e compliance |
 | [`docs/plan.md`](docs/plan.md) | Arquitetura, decisões, contratos de API, configuração da sala, captura de áudio, cifra, integração e webhook |
 | [`docs/tasks.md`](docs/tasks.md) | Backlog, estado de cada tarefa e pendências |
